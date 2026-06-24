@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Bounty — Bounty Hunt</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="page-wrapper">
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">🎯</span>
+        Bounty Hunt
+        <span class="logo-badge">alpha</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Feed</a>
+        <a href="create.html" class="nav-link active">+ Add Bounty</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+      </div>
+      <div class="nav-right"></div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="container" style="max-width:720px">
+
+      <a href="index.html" class="back-link">← Back to feed</a>
+
+      <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem">Add a Bounty</h1>
+      <p class="text-secondary mb-4">
+        Paste a tangled.org issue URL to fetch it live, or enter the details manually.
+        The AI parser will extract keywords and estimate difficulty.
+      </p>
+
+      <div class="notice notice-info mb-4">
+        <strong>How bounties work:</strong> Repo owners add <span class="kw top">#bounty</span> to a tangled.org issue.
+        The AI parses it and adds it to the ranked feed. Hunters submit PRs — no "dibs" comments.
+      </div>
+
+      <!-- Tab selector -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tab-url">Paste Issue URL</button>
+        <button class="tab-btn" data-tab="tab-manual">Manual Entry</button>
+      </div>
+
+      <!-- URL mode -->
+      <div class="tab-panel active" id="tab-url">
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="form-group mb-3">
+              <label class="form-label" for="issue-url">Tangled.org Issue URL</label>
+              <input type="url" class="form-input" id="issue-url"
+                placeholder="https://tangled.org/yourhandle/yourrepo/issues/42"
+                autocomplete="off" />
+              <span class="form-hint">The issue must contain <code>#bounty</code> in the title or body.</span>
+            </div>
+            <div class="form-group mb-3" id="api-key-group">
+              <label class="form-label" for="api-key">Claude API Key (optional)</label>
+              <input type="password" class="form-input" id="api-key"
+                placeholder="sk-ant-…"
+                autocomplete="off" />
+              <span class="form-hint">Leave blank to use the offline rule-based parser.</span>
+            </div>
+            <button class="btn btn-primary" id="fetch-btn">Fetch Issue</button>
+          </div>
+        </div>
+
+        <div class="notice notice-warn hidden" id="url-error"></div>
+
+        <div class="hidden" id="issue-preview"></div>
+      </div>
+
+      <!-- Manual mode -->
+      <div class="tab-panel" id="tab-manual">
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="form-group mb-3">
+              <label class="form-label" for="manual-title">Issue Title</label>
+              <input type="text" class="form-input" id="manual-title"
+                placeholder="Fix memory leak in connection pool"
+                autocomplete="off" />
+            </div>
+            <div class="form-group mb-3">
+              <label class="form-label" for="manual-body">Issue Body</label>
+              <textarea class="form-textarea" id="manual-body"
+                placeholder="Describe the issue in detail. Include #bounty anywhere in the text." style="min-height:200px"></textarea>
+            </div>
+            <div class="form-group mb-3">
+              <label class="form-label" for="api-key-manual">Claude API Key (optional)</label>
+              <input type="password" class="form-input" id="api-key-manual"
+                placeholder="sk-ant-…"
+                autocomplete="off" />
+              <span class="form-hint">Leave blank to use the offline rule-based parser.</span>
+            </div>
+            <button class="btn btn-primary" id="parse-btn">Parse Bounty</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result panel (shared between modes) -->
+      <div class="hidden" id="result-panel"></div>
+
+    </div>
+  </div>
+
+  <script type="module" src="js/create.js"></script>
+</body>
+</html>

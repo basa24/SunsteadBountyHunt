@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hunter Profile — Bounty Hunt</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="page-wrapper">
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">🎯</span>
+        Bounty Hunt
+        <span class="logo-badge">alpha</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Feed</a>
+        <a href="create.html" class="nav-link">+ Add Bounty</a>
+        <a href="profile.html" class="nav-link active">Profile</a>
+      </div>
+      <div class="nav-right"></div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="container" style="max-width:860px">
+
+      <a href="index.html" class="back-link">← Back to feed</a>
+
+      <!-- Profile header -->
+      <div id="profile-header"></div>
+
+      <!-- Stats -->
+      <div id="stats-row"></div>
+
+      <div class="layout-cols" style="align-items:start">
+        <!-- Awards list -->
+        <div>
+          <h2 style="font-size:1rem;font-weight:600;margin-bottom:1rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">
+            Bounty Awards
+          </h2>
+          <div id="awards-list" style="display:flex;flex-direction:column;gap:.75rem">
+            <!-- Rendered by profile.js -->
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <!-- Skill breakdown -->
+          <div class="sidebar-card">
+            <div class="sidebar-title">Skill Breakdown</div>
+            <div id="skill-bars">
+              <!-- Rendered by profile.js -->
+            </div>
+          </div>
+
+          <!-- AT Protocol schema -->
+          <div class="sidebar-card">
+            <div class="collapsible-header" style="border-top:none;padding-top:0">
+              <span class="sidebar-title" style="margin-bottom:0">AT Protocol Record</span>
+              <span class="collapsible-chevron">▼</span>
+            </div>
+            <div class="collapsible-body">
+              <div class="text-xs text-muted mb-2">sh.tangled.bounty.profile</div>
+              <pre class="code-block" id="profile-schema" style="font-size:.7rem"></pre>
+            </div>
+          </div>
+
+          <!-- Verification model -->
+          <div class="sidebar-card">
+            <div class="collapsible-header" style="border-top:none;padding-top:0">
+              <span class="sidebar-title" style="margin-bottom:0">Verification Model</span>
+              <span class="collapsible-chevron">▼</span>
+            </div>
+            <div class="collapsible-body">
+              <div style="display:flex;flex-direction:column;gap:.625rem;font-size:.8rem;color:var(--text-secondary)">
+                <p><strong style="color:var(--text-primary)">Layer 1 — ECDSA Signatures</strong><br>
+                  Each award is signed by the repo owner's key. Forgery requires their private key.</p>
+                <p><strong style="color:var(--text-primary)">Layer 2 — Double-entry</strong><br>
+                  AppView (Bobbin) cross-checks both the hunter's PDS and the owner's PDS before indexing.</p>
+                <p><strong style="color:var(--text-primary)">Layer 3 — Authority Weight</strong><br>
+                  Points scaled by repo credibility (stars, age, contributors). A sock-puppet repo awards near-zero points.</p>
+                <p><strong style="color:var(--text-primary)">Layer 4 — Git Auditability</strong><br>
+                  Every award links to a real commit hash. Fake PRs leave a permanent public trail.</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="js/profile.js"></script>
+</body>
+</html>

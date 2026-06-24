@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bounty Hunt — Open source bounties from tangled.org</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="page-wrapper">
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">🎯</span>
+        Bounty Hunt
+        <span class="logo-badge">alpha</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">Feed</a>
+        <a href="create.html" class="nav-link">+ Add Bounty</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+      </div>
+      <div class="nav-right" id="nav-user">
+        <span class="text-muted text-sm">Not connected</span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="container">
+
+      <!-- User onboarding banner -->
+      <div class="handle-banner" id="user-banner">
+        <p>🔗 Connect your <strong>tangled.org handle</strong> for a personalized feed ranked by your skills and social graph.</p>
+        <div class="handle-input-row">
+          <input type="text" class="form-input" id="handle-input"
+            placeholder="yourname.tngl.sh"
+            autocomplete="off" spellcheck="false" />
+          <button class="btn btn-primary" id="connect-btn">Connect</button>
+        </div>
+      </div>
+
+      <!-- Live data notice -->
+      <div class="notice mb-3" id="live-notice">
+        ⏳ Fetching live bounties from tangled.org…
+      </div>
+
+      <div class="layout-cols">
+        <!-- Main feed -->
+        <div>
+          <div class="filter-bar">
+            <span class="filter-label">Filter:</span>
+            <select class="filter-select" id="skill-filter">
+              <option value="">All skills</option>
+            </select>
+            <select class="filter-select" id="diff-filter">
+              <option value="">All difficulties</option>
+              <option value="1">1 · Trivial</option>
+              <option value="2">2 · Easy</option>
+              <option value="3">3 · Medium</option>
+              <option value="4">4 · Hard</option>
+              <option value="5">5 · Expert</option>
+            </select>
+            <select class="filter-select" id="sort-select">
+              <option value="relevance">Sort: Relevance</option>
+              <option value="newest">Sort: Newest</option>
+              <option value="difficulty-desc">Sort: Hardest first</option>
+              <option value="difficulty-asc">Sort: Easiest first</option>
+            </select>
+          </div>
+
+          <div class="feed-list" id="feed">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="sidebar-card">
+            <div class="sidebar-title">How It Works</div>
+            <ol style="padding-left:1.25rem;display:flex;flex-direction:column;gap:0.5rem;font-size:0.8125rem;color:var(--text-secondary)">
+              <li>Repo owner posts an issue with <span class="kw top">#bounty</span></li>
+              <li>AI detects it, extracts keywords + difficulty</li>
+              <li>Bounty appears in personalized feed</li>
+              <li>Hunter submits a PR — code is the claim</li>
+              <li>Owner merges → cryptographically signed award</li>
+            </ol>
+          </div>
+
+          <div class="sidebar-card">
+            <div class="sidebar-title">Difficulty Scale</div>
+            <div style="display:flex;flex-direction:column;gap:0.375rem;font-size:0.8125rem">
+              <div class="diff-badge diff-1" style="width:fit-content">1 · Trivial</div>
+              <div class="diff-badge diff-2" style="width:fit-content">2 · Easy</div>
+              <div class="diff-badge diff-3" style="width:fit-content">3 · Medium</div>
+              <div class="diff-badge diff-4" style="width:fit-content">4 · Hard</div>
+              <div class="diff-badge diff-5" style="width:fit-content">5 · Expert</div>
+            </div>
+          </div>
+
+          <div class="sidebar-card">
+            <div class="sidebar-title">Add a Bounty</div>
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.75rem">
+              Paste a tangled.org issue URL or enter issue details manually.
+            </p>
+            <a href="create.html" class="btn btn-primary w-full" style="justify-content:center">
+              + Add Bounty
+            </a>
+          </div>
+
+          <div class="sidebar-card">
+            <div class="sidebar-title">About</div>
+            <p style="font-size:0.8125rem;color:var(--text-secondary)">
+              Bounty Hunt reads live issues from
+              <a href="https://tangled.org" target="_blank" rel="noopener">tangled.org</a>
+              via AT Protocol XRPC. Awards are cryptographically signed and
+              portable across the AT Protocol network.
+            </p>
+          </div>
+        </aside>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

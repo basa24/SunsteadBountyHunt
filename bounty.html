@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bounty Detail — Bounty Hunt</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="page-wrapper">
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">🎯</span>
+        Bounty Hunt
+        <span class="logo-badge">alpha</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Feed</a>
+        <a href="create.html" class="nav-link">+ Add Bounty</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+      </div>
+      <div class="nav-right"></div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <div class="container" style="max-width:780px">
+
+      <a href="index.html" class="back-link">← Back to feed</a>
+
+      <div id="bounty-content">
+        <!-- Rendered by bounty.js -->
+        <div class="skeleton-card">
+          <div class="skeleton skeleton-line" style="width:70%;height:20px"></div>
+          <div class="skeleton skeleton-line" style="width:40%;height:12px"></div>
+          <div class="skeleton skeleton-line" style="width:90%;height:12px"></div>
+          <div class="skeleton skeleton-line" style="width:80%;height:12px"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="js/bounty.js"></script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+import { MOCK_BOUNTIES, DEMO_USERS } from './data.js';
+
+const KEYS = {
+  BOUNTIES:     'bh_bounties',
+  USER_HANDLE:  'bh_user_handle',
+  USER_PROFILE: 'bh_user_profile',
+  CACHE_META:   'bh_cache_meta',
+  LAST_FETCH:   'bh_last_fetch',
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function readJSON(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+}
+
+function writeJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
+    console.warn('localStorage write failed:', e);
+  }
+}
+
+// ── Bounties ──────────────────────────────────────────────────────────────
+
+export function getBounties() {
+  const stored = readJSON(KEYS.BOUNTIES);
+  if (stored && stored.length > 0) return stored;
+  // Seed with mock data on first load
+  writeJSON(KEYS.BOUNTIES, MOCK_BOUNTIES);
+  return MOCK_BOUNTIES;
+}
+
+export function setBounties(bounties) {
+  writeJSON(KEYS.BOUNTIES, bounties);
+}
+
+export function addBounty(bounty) {
+  const bounties = getBounties();
+  const existing = bounties.findIndex(b => b.id === bounty.id || b.issueUri === bounty.issueUri);
+  if (existing !== -1) {
+    bounties[existing] = { ...bounties[existing], ...bounty };
+  } else {
+    bounties.unshift(bounty);
+  }
+  writeJSON(KEYS.BOUNTIES, bounties);
+}
+
+export function getBountyById(id) {
+  return getBounties().find(b => b.id === id) || null;
+}
+
+export function markBountyCompleted(bountyId, hunterHandle) {
+  const bounties = getBounties();
+  const b = bounties.find(b => b.id === bountyId);
+  if (b) {
+    b.status = 'completed';
+    b.completedAt = new Date().toISOString();
+    b.completedBy = hunterHandle;
+    writeJSON(KEYS.BOUNTIES, bounties);
+  }
+}
+
+// Merge freshly fetched live bounties into the store, keeping local additions
+export function mergeLiveBounties(liveBounties) {
+  const current = getBounties();
+  const byUri = new Map(current.map(b => [b.issueUri, b]));
+  for (const b of liveBounties) {
+    byUri.set(b.issueUri, { ...(byUri.get(b.issueUri) || {}), ...b });
+  }
+  const merged = Array.from(byUri.values());
+  writeJSON(KEYS.BOUNTIES, merged);
+  return merged;
+}
+
+// ── User / Auth ───────────────────────────────────────────────────────────
+
+export function getUserHandle() {
+  return localStorage.getItem(KEYS.USER_HANDLE) || null;
+}
+
+export function setUserHandle(handle) {
+  localStorage.setItem(KEYS.USER_HANDLE, handle.trim().toLowerCase());
+}
+
+export function clearUserHandle() {
+  localStorage.removeItem(KEYS.USER_HANDLE);
+  localStorage.removeItem(KEYS.USER_PROFILE);
+}
+
+export function getUserProfile() {
+  const handle = getUserHandle();
+  if (!handle) return null;
+  const stored = readJSON(KEYS.USER_PROFILE);
+  if (stored) return stored;
+  // Return demo profile if handle matches
+  if (DEMO_USERS[handle]) return DEMO_USERS[handle];
+  return null;
+}
+
+export function setUserProfile(profile) {
+  writeJSON(KEYS.USER_PROFILE, profile);
+}
+
+export function updateUserProfile(updates) {
+  const profile = getUserProfile() || {};
+  const updated = { ...profile, ...updates };
+  updated.bountyProfile = { ...profile.bountyProfile, ...updates.bountyProfile };
+  writeJSON(KEYS.USER_PROFILE, updated);
+  return updated;
+}
+
+// ── Awards ────────────────────────────────────────────────────────────────
+
+export function getAwards() {
+  const profile = getUserProfile();
+  return profile?.awards || [];
+}
+
+export function addAward(award) {
+  const profile = getUserProfile();
+  if (!profile) return;
+
+  const awards = profile.awards || [];
+  awards.unshift(award);
+
+  // Recompute skill breakdown and stats
+  const bp = profile.bountyProfile || {};
+  const skills = { ...bp.skillBreakdown };
+  for (const skill of award.skills) {
+    skills[skill] = (skills[skill] || 0) + 1;
+  }
+
+  const totalCompleted = awards.length;
+  const totalPoints = awards.reduce((s, a) => s + (a.points || 0), 0);
+  const avgDifficulty = awards.reduce((s, a) => s + a.difficulty, 0) / totalCompleted;
+
+  // Simple streak: consecutive days with at least one award
+  const streak = computeStreak(awards);
+
+  const updated = {
+    ...profile,
+    awards,
+    bountyProfile: {
+      ...bp,
+      skillBreakdown: skills,
+      totalCompleted,
+      totalPoints,
+      avgDifficulty: +avgDifficulty.toFixed(1),
+      completionStreak: streak,
+      lastUpdated: new Date().toISOString(),
+    },
+  };
+  writeJSON(KEYS.USER_PROFILE, updated);
+  return updated;
+}
+
+function computeStreak(awards) {
+  if (!awards.length) return 0;
+  const sorted = [...awards].sort((a, b) => new Date(b.awardedAt) - new Date(a.awardedAt));
+  let streak = 1;
+  let prev = new Date(sorted[0].awardedAt);
+  prev.setHours(0, 0, 0, 0);
+  for (let i = 1; i < sorted.length; i++) {
+    const d = new Date(sorted[i].awardedAt);
+    d.setHours(0, 0, 0, 0);
+    const diff = (prev - d) / 86400000;
+    if (diff === 1) { streak++; prev = d; }
+    else if (diff === 0) continue;
+    else break;
+  }
+  return streak;
+}
+
+// ── Fetch cache metadata ──────────────────────────────────────────────────
+
+export function getFetchMeta(repoKey) {
+  const meta = readJSON(KEYS.CACHE_META) || {};
+  return meta[repoKey] || null;
+}
+
+export function setFetchMeta(repoKey) {
+  const meta = readJSON(KEYS.CACHE_META) || {};
+  meta[repoKey] = { fetchedAt: Date.now() };
+  writeJSON(KEYS.CACHE_META, meta);
+}
+
+export function isCacheFresh(repoKey) {
+  const m = getFetchMeta(repoKey);
+  return m && (Date.now() - m.fetchedAt) < CACHE_TTL_MS;
+}
+
+// ── Reset (for dev/testing) ───────────────────────────────────────────────
+
+export function resetAll() {
+  Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+}
