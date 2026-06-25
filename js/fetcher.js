@@ -87,6 +87,9 @@ export function issueRecordToBounty(record, repoMeta = {}) {
   const repoFromRef = repoRef.includes('/') ? rkeyOf(repoRef) : '';
   const repoName = repoMeta.repo || repoFromRef || 'repo';
   const handle   = repoMeta.handle || repoMeta.did || 'unknown';
+  // The PR target needs the REPO's DID. Newer tangled repos reference it as a
+  // bare DID in the issue's `repo` field; that's the real `target.repo`.
+  const repoDid  = repoMeta.repoDid || (repoRef.startsWith('did:') ? repoRef : undefined);
 
   return {
     id,
@@ -99,6 +102,7 @@ export function issueRecordToBounty(record, repoMeta = {}) {
       name: repoName,
       handle,
       ownerDid: repoMeta.did,
+      repoDid,
       stars: repoMeta.stars || 0,
       language: repoMeta.language || parsed.topKeywords[0] || 'unknown',
       authorityWeight: repoMeta.authorityWeight || computeAuthorityWeight({ stars: repoMeta.stars || 0 }),
@@ -228,6 +232,46 @@ export async function fetchOpenIssueUris(ownerHandle, repoName) {
   } catch {
     return null;
   }
+}
+
+// Normalize a PR/issue title for matching across the appview HTML and our
+// stored submission (unescape basic entities, collapse whitespace, lowercase).
+export function normalizeTitle(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Read a repo's pull requests grouped by state from tangled's appview. The
+// pulls list is server-rendered with no API/CORS, so (dev-only) we scrape it
+// through the /tnglweb proxy — same approach as issue state. For each of
+// open/merged/closed we collect the set of PR titles and author DIDs present,
+// which is enough to resolve the state of a PR we created (match by title +
+// author DID). Returns { open:{titles,dids}, merged:{...}, closed:{...} } or
+// null when it can't be determined (production build / fetch failure).
+export async function fetchPullStatuses(ownerHandle, repoName) {
+  if (!import.meta.env?.DEV) return null;
+  if (!ownerHandle || !repoName) return null;
+
+  const base = `/tnglweb/${encodeURIComponent(ownerHandle)}/${encodeURIComponent(repoName)}/pulls`;
+  const out = {};
+  for (const state of ['open', 'merged', 'closed']) {
+    try {
+      const html = await (await fetch(`${base}?state=${state}`)).text();
+      const titles = new Set(
+        [...html.matchAll(/\/pulls\/\d+"[^>]*class="dark:text-white"[^>]*>\s*([^<]+)/g)]
+          .map(m => normalizeTitle(m[1]))
+      );
+      const dids = new Set(
+        [...html.matchAll(/avatar\.tangled\.sh\/[a-f0-9]+\/(did:plc:[a-z0-9]+)/g)].map(m => m[1])
+      );
+      out[state] = { titles, dids };
+    } catch {
+      out[state] = { titles: new Set(), dids: new Set() };
+    }
+  }
+  return out;
 }
 
 // Resolve repoDid/at-uri → name for a single owner DID (cached by callers).

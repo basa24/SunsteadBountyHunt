@@ -2,6 +2,7 @@ import { getBounties, getUserHandle, getUserProfile, setUserHandle, setUserProfi
 import { fetchLiveBounties, fetchUserProfile, fetchUserBounties } from './fetcher.js';
 import { login, logout, isLoggedIn, getSession } from './auth.js';
 import { connectFirehose } from './firehose.js';
+import { reconcileSubmissions } from './pulls.js';
 import { rankBounties, extractAllSkills } from './ranking.js';
 import { DIFFICULTY_LABELS } from './data.js';
 
@@ -22,6 +23,22 @@ function diffClass(d) {
   if (d === 3) return 'diff-3';
   if (d === 4) return 'diff-4';
   return 'diff-5';
+}
+
+// Difficulty hex (mirrors the --diff-N CSS tokens) for the per-card skull SVG.
+const DIFF_HEX = { 1: '#3fb950', 2: '#3fb950', 3: '#d29922', 4: '#f85149', 5: '#a371f7' };
+
+// Inline SVG skull tinted to the bounty's difficulty colour. viewBox is cropped
+// tight to the silhouette so it fills the card's full height. Eyes/nose are the
+// page background colour so they read as cut-out sockets over the dark gutter.
+function skullUri(d) {
+  const hex = DIFF_HEX[d] || '#f0b429';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='10 4 44 52'>`
+    + `<g fill='${hex}'><ellipse cx='32' cy='26' rx='22' ry='22'/><rect x='22' y='40' width='20' height='16' rx='6'/></g>`
+    + `<g fill='#0d1117'><ellipse cx='22' cy='27' rx='6.5' ry='8'/><ellipse cx='42' cy='27' rx='6.5' ry='8'/>`
+    + `<path d='M32 33 L27 43 L37 43 Z'/><rect x='27' y='46' width='2.5' height='9'/>`
+    + `<rect x='31' y='46' width='2.5' height='10'/><rect x='35' y='46' width='2.5' height='9'/></g></svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg).replace(/'/g, '%27');
 }
 
 function points(bounty) {
@@ -59,8 +76,8 @@ function renderBountyCard(bounty) {
   const diffLabelFull = `Difficulty ${bounty.difficulty} · ${diffLabel(bounty.difficulty)}`;
 
   return `
-    <div class="bounty-card-wrap">
-      <div class="card card-hover" style="--diff-color:var(--diff-${bounty.difficulty})"
+    <div class="bounty-card-wrap" style="--diff-color:var(--diff-${bounty.difficulty}); --skull:url(${skullUri(bounty.difficulty)})">
+      <div class="card card-hover"
            onclick="window.location='bounty.html?id=${bounty.id}'">
       <div class="card-body bounty-card">
         <div class="bounty-card-top">
@@ -280,6 +297,8 @@ async function init() {
   if (isLoggedIn()) {
     const n = await syncUserBounties();
     if (n > 0) setLive('live', 'Live');
+    // Resolve any pending PRs (e.g. merged/closed since last visit).
+    reconcileSubmissions().then(({ changed }) => { if (changed) applyFilters(); });
   }
 
   // Final render with fresh data
@@ -358,7 +377,12 @@ async function syncUserBounties() {
 
 function startUserBountyPolling() {
   if (_pollTimer) return;
-  _pollTimer = setInterval(() => { syncUserBounties(); }, 20000);
+  _pollTimer = setInterval(async () => {
+    await syncUserBounties();
+    // Watch open PRs for the owner's merge/close on tangled.
+    const { changed } = await reconcileSubmissions();
+    if (changed) applyFilters();
+  }, 20000);
   window.addEventListener('beforeunload', () => clearInterval(_pollTimer));
 }
 

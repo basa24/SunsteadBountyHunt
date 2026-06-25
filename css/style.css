@@ -554,6 +554,8 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  flex: none;              /* never shrink — keeps a uniform pill height */
+  white-space: nowrap;     /* coin + amount stay on one line */
   font-size: 0.8125rem;
   font-weight: 800;
   letter-spacing: 0.01em;
@@ -566,7 +568,7 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
 }
 
-/* The coin itself — a struck gold disc */
+/* The coin itself — a struck gold disc (static until the chip is hovered) */
 .points-badge::before {
   content: '';
   width: 15px;
@@ -579,10 +581,9 @@ button { font-family: inherit; cursor: pointer; }
     inset 0 0 0 1.5px rgba(255, 255, 255, 0.4),
     inset 0 -2px 3px rgba(120, 78, 0, 0.5),
     0 0 7px var(--gold-glow);
-  animation: coinSpin 6s var(--ease-out) infinite;
 }
 
-/* Light streak that sweeps across the chip */
+/* Light streak — parked off-chip until hover */
 .points-badge::after {
   content: '';
   position: absolute;
@@ -590,8 +591,11 @@ button { font-family: inherit; cursor: pointer; }
   width: 40%; height: 100%;
   background: linear-gradient(110deg, transparent, rgba(255,255,255,0.35), transparent);
   transform: skewX(-18deg);
-  animation: coinShine 4.5s ease-in-out infinite;
 }
+
+/* Animate the coin (spin) and streak (sweep) when the whole bounty card is hovered */
+.card-hover:hover .points-badge::before { animation: coinSpin 2.4s var(--ease-out) infinite; }
+.card-hover:hover .points-badge::after  { animation: coinShine 1.6s ease-in-out infinite; }
 
 /* Larger coin used in detail headers (font-size override on the element) */
 .points-badge[style*="font-size:1rem"]::before,
@@ -1528,23 +1532,16 @@ button { font-family: inherit; cursor: pointer; }
   top: 0; bottom: 0;          /* full height of the card */
   left: 0;
   aspect-ratio: 1 / 1;        /* square → width tracks card height */
-  transform: translateX(-50%) scale(0.82);  /* center on the left edge → half shows */
+  transform: translateX(-50%);  /* centered on the left edge → half shows; exactly card-height */
   z-index: 0;
-  opacity: 0;
+  opacity: 0;                 /* instant show/hide — no transition, no fade lag */
   pointer-events: none;
-  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><g fill='%23ffd84d'><ellipse cx='32' cy='26' rx='22' ry='22'/><rect x='22' y='40' width='20' height='16' rx='6'/></g><g fill='%230d1117'><ellipse cx='22' cy='27' rx='6.5' ry='8'/><ellipse cx='42' cy='27' rx='6.5' ry='8'/><path d='M32 33 L27 43 L37 43 Z'/><rect x='27' y='46' width='2.5' height='9'/><rect x='31' y='46' width='2.5' height='10'/><rect x='35' y='46' width='2.5' height='9'/></g></svg>") center / contain no-repeat;
-  transition: opacity 0.4s var(--ease-out), transform 0.45s var(--ease-spring);
+  background: var(--skull) center / contain no-repeat;  /* tinted to difficulty in app.js */
 }
 
 .bounty-card-wrap:hover::before {
-  transform: translateX(-50%) scale(1);
-  animation: skullShine 0.9s var(--ease-out) forwards;
-}
-
-@keyframes skullShine {
-  0%   { opacity: 0;    filter: drop-shadow(0 0 0 transparent) brightness(1.7); }
-  50%  { opacity: 0.62; }
-  100% { opacity: 0.45; filter: drop-shadow(0 0 9px var(--gold-glow)) brightness(1); }
+  opacity: 0.55;
+  filter: drop-shadow(0 0 9px var(--diff-color, var(--gold-glow)));
 }
 
 /* Keep the centered nav from overflowing on small screens */

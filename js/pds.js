@@ -24,6 +24,42 @@ export async function createRecord(collection, record, rkey) {
   return authedFetch('com.atproto.repo.createRecord', { method: 'POST', body });
 }
 
+// Upload a binary blob to the logged-in user's PDS. Returns the blob ref
+// (the object you embed in a record's blob field).
+export async function uploadBlob(bytes, mimeType) {
+  const res = await authedFetch('com.atproto.repo.uploadBlob', {
+    method: 'POST',
+    rawBody: bytes,
+    contentType: mimeType,
+  });
+  return res.blob;
+}
+
+// gzip a UTF-8 string in the browser via the Compression Streams API.
+async function gzipString(text) {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buf = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+// Create a REAL tangled pull request (sh.tangled.repo.pull) on the hunter's PDS.
+// The patch is a git-format-patch text; tangled stores it gzipped as a blob.
+// Returns { uri, cid }.
+export async function submitPullRecord({ repoDid, branch = 'main', title, body = '', references = [], patchText }) {
+  if (!repoDid) throw new Error('submitPullRecord requires a target repo DID');
+  const gz = await gzipString(patchText);
+  const patchBlob = await uploadBlob(gz, 'application/gzip');
+  const now = new Date().toISOString();
+  return createRecord('sh.tangled.repo.pull', {
+    target: { repo: repoDid, branch },
+    title,
+    body,
+    references,
+    rounds: [{ patchBlob, createdAt: now }],
+    createdAt: now,
+  });
+}
+
 // Write a bounty post (sh.tangled.bounty.post) from a parsed bounty object.
 export async function publishBountyRecord(bounty) {
   return createRecord('sh.tangled.bounty.post', {

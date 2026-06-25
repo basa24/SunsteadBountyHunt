@@ -6,6 +6,7 @@ const KEYS = {
   USER_PROFILE: 'bh_user_profile',
   CACHE_META:   'bh_cache_meta',
   LAST_FETCH:   'bh_last_fetch',
+  SUBMISSIONS:  'bh_submissions',
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -187,6 +188,36 @@ function computeStreak(awards) {
     else break;
   }
   return streak;
+}
+
+// ── Pull-request submissions ────────────────────────────────────────────────
+// Tracks bounties the user has opened a real PR for, and the PR's observed
+// state on tangled: 'pending' → 'awarded' (merged) | 'declined' (closed).
+// Keyed by prUri; tagged with authorDid so we never mix accounts.
+
+export function getSubmissions() {
+  return readJSON(KEYS.SUBMISSIONS) || [];
+}
+
+export function addSubmission(sub) {
+  const subs = getSubmissions();
+  if (!subs.some(s => s.prUri === sub.prUri)) subs.unshift(sub);
+  writeJSON(KEYS.SUBMISSIONS, subs);
+}
+
+export function updateSubmission(prUri, patch) {
+  const subs = getSubmissions();
+  const i = subs.findIndex(s => s.prUri === prUri);
+  if (i !== -1) {
+    subs[i] = { ...subs[i], ...patch };
+    writeJSON(KEYS.SUBMISSIONS, subs);
+  }
+}
+
+// Latest submission for a bounty by a given author (the logged-in hunter).
+export function getSubmissionForBounty(bountyId, authorDid) {
+  return getSubmissions().find(s =>
+    s.bountyId === bountyId && (!authorDid || s.authorDid === authorDid)) || null;
 }
 
 // ── Fetch cache metadata ──────────────────────────────────────────────────

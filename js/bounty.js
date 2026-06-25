@@ -1,7 +1,7 @@
-import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward } from './storage.js';
-import { createSignedAward, verifyAward, truncateHex } from './signer.js';
+import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty } from './storage.js';
+import { verifyAward, truncateHex } from './signer.js';
 import { isLoggedIn, getSession } from './auth.js';
-import { publishAwardRecord } from './pds.js';
+import { submitPullRequest, canSubmitPR } from './pulls.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
 import { renderNavChip } from './navchip.js';
 
@@ -146,12 +146,64 @@ function renderBounty(bounty) {
   });
 }
 
-// ── PR Simulation ─────────────────────────────────────────────────────────
+// ── Pull request: submit → owner merges on tangled → award ──────────────────
+
+function pullsUrl(bounty) {
+  return `https://tangled.org/${bounty.repo?.handle}/${bounty.repo?.name}/pulls`;
+}
 
 function renderPRSection(bounty) {
   const section = document.getElementById('pr-section');
-  const loggedIn = isLoggedIn();
+  const session = getSession();
+  const sub = isLoggedIn() ? getSubmissionForBounty(bounty.id, session?.did) : null;
 
+  // Already have a submission for this bounty → show its live status.
+  if (sub) {
+    if (sub.status === 'awarded') {
+      const award = (getUserProfile()?.awards || []).find(a => a.bountyId === bounty.id);
+      section.innerHTML = `
+        <div class="success-panel mb-4">
+          <div class="success-icon">🪙</div>
+          <div class="success-title">PR Merged — Gold Knots Minted!</div>
+          <div class="success-sub flex flex-col items-center gap-2">
+            ${award ? `<span class="points-badge lg gk-pop" style="font-size:1.125rem">+${award.points} Gold Knots</span>` : ''}
+            <span class="text-xs text-muted">Awarded after the owner merged your PR on tangled.</span>
+          </div>
+          <a href="profile.html" class="btn btn-primary mt-2">View Your Profile →</a>
+        </div>
+      `;
+      if (award) renderVerifyPanel(award);
+      return;
+    }
+    if (sub.status === 'declined') {
+      section.innerHTML = `
+        <div class="card mb-4"><div class="card-body">
+          <div class="notice notice-warn mb-2">✗ Your pull request was closed without merging — no award.</div>
+          <p class="text-sm text-secondary mb-3">You can submit a new pull request to try again.</p>
+          <button class="btn btn-primary" id="pr-btn">Submit Another Pull Request</button>
+        </div></div>
+      `;
+      document.getElementById('pr-btn')?.addEventListener('click', () => onSubmitPR(bounty));
+      return;
+    }
+    // pending
+    section.innerHTML = `
+      <div class="card mb-4" style="border-color:var(--bounty-green-dim)"><div class="card-body">
+        <div class="parse-section-title mb-2">Pull Request Submitted</div>
+        <p class="text-sm text-secondary mb-2">
+          ⏳ Awaiting the owner's review on tangled. When they <strong>merge</strong> it, your award is recorded
+          automatically (we watch the PR's status). If they close it, it's marked declined.
+        </p>
+        <div class="flex items-center gap-2">
+          <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">View pulls on tangled ↗</a>
+        </div>
+        <div class="text-xs text-muted mt-2" style="word-break:break-all">PR: <code>${escHtml(sub.prUri)}</code></div>
+      </div></div>
+    `;
+    return;
+  }
+
+  // Bounty completed by someone else.
   if (bounty.status === 'completed') {
     section.innerHTML = `
       <div class="notice" style="margin-bottom:1rem">
@@ -161,85 +213,48 @@ function renderPRSection(bounty) {
     return;
   }
 
+  // No submission yet → offer to open a real PR.
+  const loggedIn = isLoggedIn();
+  const submittable = canSubmitPR(bounty);
   section.innerHTML = `
     <div class="card mb-4" style="border-color:var(--bounty-green-dim)">
       <div class="card-body">
         <div class="parse-section-title mb-2">Submit Your Solution</div>
         <p class="text-sm text-secondary mb-3">
-          Submit a PR to <a href="https://tangled.org/${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}" target="_blank">
-            ${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}
-          </a> referencing this issue. When the owner merges it, your award is recorded.
+          Open a pull request on
+          <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener">${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}</a>.
+          The owner reviews and <strong>merges it on tangled</strong>; we detect the merge and record your award.
         </p>
         ${!loggedIn ? `
-          <div class="notice notice-warn mb-3">Sign in on the main page to claim awards (writes a signed record to your PDS).</div>
-        ` : ''}
-        <button class="btn btn-primary btn-lg w-full" id="pr-btn" ${!loggedIn ? 'disabled' : ''}>
-          Simulate PR Merge & Claim Award
+          <div class="notice notice-warn mb-3">Sign in on the main page to submit a pull request.</div>
+        ` : (!submittable ? `
+          <div class="notice notice-warn mb-3">This is a demo/mock bounty — it has no real tangled repo to open a PR against.</div>
+        ` : '')}
+        <button class="btn btn-primary btn-lg w-full" id="pr-btn" ${(!loggedIn || !submittable) ? 'disabled' : ''}>
+          Submit Pull Request
         </button>
         <p class="text-xs text-muted mt-2 text-center">
-          In production: submitting a real PR to tangled.org is the hunt — no "dibs" or comments needed.
+          A real <code>sh.tangled.repo.pull</code> is written to your PDS and shows up on tangled's pulls page.
         </p>
       </div>
     </div>
   `;
 
-  document.getElementById('pr-btn')?.addEventListener('click', () => simulatePR(bounty));
+  document.getElementById('pr-btn')?.addEventListener('click', () => onSubmitPR(bounty));
 }
 
-async function simulatePR(bounty) {
+async function onSubmitPR(bounty) {
   const btn = document.getElementById('pr-btn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Processing…';
-
-  const profile = getUserProfile();
-  const session = getSession();
-  const handle  = session?.handle || getUserHandle();
-
-  await new Promise(r => setTimeout(r, 600)); // brief pacing before the write
-
-  // Create cryptographically signed award (demo signature, kept for the
-  // verification panel below).
-  const award = await createSignedAward({
-    bounty,
-    hunterDid:    session?.did || profile?.did,
-    hunterHandle: handle,
-  });
-
-  // Write a REAL sh.tangled.bounty.award record to the hunter's PDS.
-  let recordUri = null;
+  btn.innerHTML = '<span class="spinner"></span> Submitting PR…';
   try {
-    const { uri } = await publishAwardRecord(award);
-    recordUri = uri;
-    award.uri = uri;
+    await submitPullRequest(bounty);
+    renderPRSection(bounty); // re-render → now shows the pending state
   } catch (e) {
-    console.warn('Award PDS write failed, kept local copy:', e.message);
+    btn.disabled = false;
+    btn.textContent = 'Submit Pull Request';
+    alert(e.message);
   }
-
-  // Cache locally for the profile page / instant UI.
-  addAward(award);
-  markBountyCompleted(bounty.id, handle);
-
-  // Show success
-  const section = document.getElementById('pr-section');
-  section.innerHTML = `
-    <div class="success-panel mb-4">
-      <div class="success-icon">🪙</div>
-      <div class="success-title">Gold Knots Minted!</div>
-      <div class="success-sub flex flex-col items-center gap-2">
-        <span class="points-badge lg gk-pop" style="font-size:1.125rem">+${award.points} Gold Knots</span>
-        <span>${escHtml(bounty.topKeywords?.join(', ') || '')}</span>
-      </div>
-      ${recordUri ? `
-        <div class="text-xs text-muted mt-1" style="word-break:break-all">
-          ✓ Written to your PDS: <code>${escHtml(recordUri)}</code>
-        </div>` : `
-        <div class="text-xs text-muted mt-1">Saved locally (PDS write unavailable).</div>`}
-      <a href="profile.html" class="btn btn-primary mt-2">View Your Profile →</a>
-    </div>
-  `;
-
-  // Show verification panel
-  renderVerifyPanel(award);
 }
 
 // ── Verification panel ────────────────────────────────────────────────────

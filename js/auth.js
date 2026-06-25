@@ -122,23 +122,27 @@ export async function refreshSession() {
 // Call an XRPC method on the logged-in user's PDS with the bearer token.
 // Retries once via refreshSession() on a 401 (expired accessJwt).
 // `endpoint` is an NSID, e.g. 'com.atproto.repo.createRecord'.
-export async function authedFetch(endpoint, { method = 'POST', body } = {}, _retried = false) {
+// `body` is JSON-encoded. For binary uploads (e.g. uploadBlob) pass `rawBody`
+// (a Uint8Array/Blob/ArrayBuffer) + `contentType` instead.
+export async function authedFetch(endpoint, { method = 'POST', body, rawBody, contentType } = {}, _retried = false) {
   const s = readSession();
   if (!s?.accessJwt) throw new Error('Not logged in.');
 
-  const res = await fetch(`${s.pdsEndpoint}/xrpc/${endpoint}`, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${s.accessJwt}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
+  const headers = { 'Authorization': `Bearer ${s.accessJwt}`, 'Accept': 'application/json' };
+  let payload;
+  if (rawBody != null) {
+    headers['Content-Type'] = contentType || 'application/octet-stream';
+    payload = rawBody;
+  } else {
+    headers['Content-Type'] = 'application/json';
+    payload = body != null ? JSON.stringify(body) : undefined;
+  }
+
+  const res = await fetch(`${s.pdsEndpoint}/xrpc/${endpoint}`, { method, headers, body: payload });
 
   if (res.status === 401 && !_retried) {
     await refreshSession();
-    return authedFetch(endpoint, { method, body }, true);
+    return authedFetch(endpoint, { method, body, rawBody, contentType }, true);
   }
 
   if (!res.ok) {
