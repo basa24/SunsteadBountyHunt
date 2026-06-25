@@ -783,6 +783,51 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 0 0 3px var(--teal-glow);
 }
 
+/* ── Custom checkboxes — themed square that fills teal→gold with a tick ── */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-accent);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
+  transition: border-color 0.18s var(--ease-out),
+              background 0.18s var(--ease-out),
+              box-shadow 0.18s var(--ease-out),
+              transform 0.1s var(--ease-spring);
+}
+input[type="checkbox"]::after {
+  content: "";
+  width: 0.34rem;
+  height: 0.62rem;
+  margin-top: -2px; /* optical centering of the rotated tick */
+  border: solid var(--bg-primary);
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.16s var(--ease-spring);
+}
+input[type="checkbox"]:hover {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, var(--teal-bright), var(--gold-bright));
+  border-color: transparent;
+}
+input[type="checkbox"]:checked::after { transform: rotate(45deg) scale(1); }
+input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+input[type="checkbox"]:active { transform: scale(0.88); }
+
 .form-textarea {
   resize: vertical;
   min-height: 160px;
