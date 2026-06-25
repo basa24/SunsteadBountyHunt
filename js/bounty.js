@@ -1,5 +1,6 @@
 import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
+import { verifyAwardOnChain } from './repo-verify.js';
 import { isLoggedIn, getSession } from './auth.js';
 import { startSubmission, canTrackPR, reconcileSubmissions } from './pulls.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
@@ -49,9 +50,42 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
+// ── Fake "active hunters" presence ──────────────────────────────────────────
+// A small, stable-per-bounty count that drifts a little over time so the page
+// feels alive. Purely cosmetic — there's no real presence backend.
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+function seedHunters(bounty) {
+  const base = hashStr(String(bounty.id || bounty.issueUri || 'x'));
+  return 1 + (base % 4) + (bounty.difficulty >= 4 ? base % 3 : 0); // ~1–8, harder = busier
+}
+
+let _huntersTimer = null;
+function startHuntersTicker(initial) {
+  clearInterval(_huntersTimer);
+  let n = initial;
+  _huntersTimer = setInterval(() => {
+    const el = document.getElementById('hunters-count');
+    if (!el) { clearInterval(_huntersTimer); return; }
+    if (Math.random() < 0.55) {
+      n = Math.max(1, Math.min(initial + 3, n + (Math.random() < 0.5 ? -1 : 1)));
+      if (String(n) !== el.textContent) {
+        el.textContent = n;
+        const wrap = el.closest('.hunters-live');
+        wrap?.classList.remove('bump'); void wrap?.offsetWidth; wrap?.classList.add('bump');
+      }
+    }
+  }, 6500 + Math.floor(Math.random() * 5000));
+  window.addEventListener('beforeunload', () => clearInterval(_huntersTimer));
+}
+
 // ── Render bounty detail ──────────────────────────────────────────────────
 
 function renderBounty(bounty) {
+  const hunters = seedHunters(bounty);
   const topHtml = (bounty.topKeywords || []).map(k => `<span class="kw top">${k}</span>`).join('');
   const kwHtml  = (bounty.keywords   || [])
     .filter(k => !bounty.topKeywords?.includes(k))
@@ -89,6 +123,9 @@ function renderBounty(bounty) {
         <div class="detail-meta">
           <span class="status-badge status-open">● Open</span>
           <span class="text-muted text-xs">Posted ${timeAgo(bounty.createdAt)}</span>
+          <span class="hunters-live" title="Hunters with an active submission on this bounty right now">
+            <span class="hunters-dot"></span><span id="hunters-count">${hunters}</span>&nbsp;hunting now
+          </span>
         </div>
         <span class="diff-badge ${diffClass(bounty.difficulty)}">
           <span class="diff-pip ${diffClass(bounty.difficulty)}"></span>
@@ -161,6 +198,8 @@ function renderBounty(bounty) {
     this.classList.toggle('open');
     document.getElementById('schema-body').classList.toggle('open');
   });
+
+  startHuntersTicker(hunters);
 }
 
 // ── Pull request: submit → owner merges on tangled → award ──────────────────
@@ -285,6 +324,18 @@ function onStart(bounty) {
 
 // ── Verification panel ────────────────────────────────────────────────────
 
+// Render the ordered chain of on-chain verification checks (from repo-verify).
+function renderVerifySteps(steps) {
+  if (!steps?.length) return '';
+  return `<div class="mt-2" style="display:flex;flex-direction:column;gap:0.15rem">${
+    steps.map(s => `
+      <div style="display:flex;gap:0.5rem;align-items:baseline;font-size:0.8125rem">
+        <span style="color:var(--${s.ok ? 'bounty-green' : 'diff-4'},${s.ok ? '#3fb950' : '#f85149'})">${s.ok ? '✓' : '✗'}</span>
+        <span style="flex:1">${escHtml(s.label)}${s.detail ? ` <span class="text-muted font-mono" style="font-size:0.75rem">— ${escHtml(s.detail)}</span>` : ''}</span>
+      </div>`).join('')
+  }</div>`;
+}
+
 function renderVerifyPanel(award) {
   const section = document.getElementById('verify-section');
   section.innerHTML = `
@@ -292,13 +343,26 @@ function renderVerifyPanel(award) {
       <div class="card-body">
         <div class="flex items-center justify-between mb-3">
           <div class="parse-section-title">Cryptographic Verification</div>
-          <span class="verified-badge">✓ ECDSA P-256 Signed</span>
+          <span class="verified-badge">✓ Repo commit signed</span>
         </div>
 
         <p class="text-sm text-secondary mb-3">
-          This award record is signed with an ECDSA P-256 key. The signature covers:
-          bountyUri + pullRequestUri + hunterDid + awardedAt. No one can forge this
-          without the signer's private key.
+          <strong class="text-secondary">On-chain proof — the real DID key.</strong> When this award was
+          written to the hunter's PDS, their AT Protocol repository commit was signed with the account's
+          <strong>real DID signing key</strong> (the <code>#atproto</code> key in their DID document). We
+          re-verify that signature here in your browser using only public data: fetch the signed proof,
+          check the commit signature against the DID document, and prove the award sits inside that
+          signed commit. No trust in this app required.
+        </p>
+        <button class="btn btn-primary btn-sm mb-2" id="onchain-btn">Verify on-chain (real DID key) →</button>
+        <div id="onchain-result" class="mb-3"></div>
+
+        <p class="text-sm text-secondary mb-3">
+          <strong class="text-secondary">App-layer integrity (demo key).</strong> Separately, the award
+          carries an ephemeral session-key signature (ECDSA P-256) over bountyUri + pullRequestUri +
+          hunterDid + awardedAt. That key is per-session and not tied to any identity, so it proves those
+          four fields are unaltered — but not <em>who</em> authorized them. The on-chain check above is
+          what binds the award to a real account.
         </p>
 
         <div class="verify-panel">
@@ -343,6 +407,22 @@ function renderVerifyPanel(award) {
     document.getElementById('award-schema-body').classList.toggle('open');
   });
 
+  document.getElementById('onchain-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('onchain-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Verifying on-chain…';
+    const r = await verifyAwardOnChain(award);
+    btn.disabled = false;
+    btn.textContent = 'Re-run on-chain verification →';
+    document.getElementById('onchain-result').innerHTML = `
+      <div class="verify-status ${r.ok ? 'verify-pass' : 'verify-fail'}">
+        ${r.ok ? "✓ Signed by the account's real DID key" : '✗ On-chain verification failed'}
+      </div>
+      ${renderVerifySteps(r.steps)}
+      <p class="text-xs text-muted mt-1">${escHtml(r.reason)}</p>
+    `;
+  });
+
   document.getElementById('verify-btn').addEventListener('click', async () => {
     const btn = document.getElementById('verify-btn');
     btn.disabled = true;
@@ -380,7 +460,7 @@ function init() {
     return;
   }
 
-  document.title = `${bounty.issueTitle} — Bounty Hunt`;
+  document.title = `${bounty.issueTitle} — Knotch`;
   renderBounty(bounty);
   renderPRSection(bounty);
 

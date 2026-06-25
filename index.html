@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="theme-color" content="#0d1117" />
-  <title>Bounty Hunt — Open source bounties from tangled.org</title>
+  <title>Knotch — Open source bounties from tangled.org</title>
   <link rel="stylesheet" href="css/style.css" />
   <!-- Skip the intro gate when arriving from an internal page (Back to Feed / logo). -->
   <script>try { if (sessionStorage.getItem('bh_from_app')) { document.documentElement.classList.add('skip-start'); sessionStorage.removeItem('bh_from_app'); } } catch (e) {}</script>
@@ -15,8 +15,9 @@
   <!-- Start screen: the welcoming gate before the app is revealed -->
   <div id="start-screen" class="start-screen">
     <div class="start-inner">
-      <span class="start-icon">🎯</span>
-      <h1 class="start-title">Bounty Hunt</h1>
+      <h1 class="start-title">
+        <span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span>
+      </h1>
       <span class="logo-by start-by">by
         <svg class="tangled-wordmark" viewBox="0 0 118 31" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tangled">
           <path fill-rule="evenodd" clip-rule="evenodd" d="M78.6118 9.75728C79.2832 9.75733 79.8454 9.87208 80.2983 10.101C80.7513 10.3249 81.1161 10.6064 81.3921 10.9448C81.6732 11.278 81.8895 11.6064 82.0405 11.9292H82.1655V9.91353H85.4702V22.0307C85.4702 23.0305 85.2201 23.8668 84.7202 24.5385C84.2203 25.2154 83.5273 25.7251 82.6421 26.0688C81.762 26.4125 80.7488 26.5844 79.603 26.5844C78.5252 26.5844 77.6012 26.4385 76.8306 26.1469C76.065 25.8553 75.4555 25.462 75.0024 24.9672C74.5495 24.4726 74.2551 23.9237 74.1196 23.3198L77.1978 22.9057C77.2915 23.1243 77.4401 23.3303 77.6431 23.5229C77.8461 23.7206 78.1147 23.8824 78.4478 24.0073C78.7861 24.1321 79.1973 24.1947 79.6812 24.1948C80.4049 24.1948 81.0016 24.0227 81.4702 23.6792C81.9441 23.3355 82.1811 22.7701 82.1812 21.9838V19.7885H82.0405C81.8947 20.1217 81.6758 20.4371 81.3843 20.7338C81.0927 21.0306 80.7174 21.273 80.2593 21.4604C79.8012 21.6477 79.2546 21.7416 78.6196 21.7417C77.7188 21.7417 76.8981 21.5332 76.1587 21.1167C75.4244 20.6948 74.8383 20.0514 74.4009 19.187C73.9686 18.3172 73.7524 17.2181 73.7524 15.8901C73.7524 14.5308 73.9738 13.3952 74.4165 12.4838C74.8592 11.5726 75.4479 10.89 76.1821 10.437C76.9216 9.98403 77.7318 9.75728 78.6118 9.75728ZM79.6733 12.4057C79.1269 12.4058 78.6663 12.5544 78.2915 12.851C77.9166 13.1426 77.6326 13.5491 77.4399 14.0698C77.2472 14.5906 77.1509 15.1922 77.1509 15.8745C77.1509 16.5671 77.2472 17.1662 77.4399 17.6713C77.6378 18.1712 77.9218 18.5594 78.2915 18.8354C78.6663 19.106 79.1269 19.2416 79.6733 19.2417C80.2096 19.2417 80.663 19.1087 81.0327 18.8432C81.4076 18.5724 81.6942 18.1868 81.8921 17.687C82.0952 17.1818 82.1968 16.5776 82.1968 15.8745C82.1968 15.1714 82.0978 14.5619 81.8999 14.0463C81.702 13.5256 81.4155 13.1218 81.0405 12.8354C80.6656 12.5491 80.2096 12.4057 79.6733 12.4057Z"/>
@@ -52,8 +53,7 @@
       </div>
       <a href="index.html" class="nav-center nav-logo">
         <span class="logo-main">
-          <span class="logo-icon">🎯</span>
-          Bounty Hunt
+          <span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span>
           <span class="logo-badge">alpha</span>
         </span>
         <span class="logo-by">by
@@ -81,6 +81,7 @@
       <!-- Concept hero -->
       <header class="concept-hero">
         <h1>Hunt with PRs. <span class="accent">Earn Gold Knots 🪙</span></h1>
+        <p class="concept-sub">Knotch turns <span class="kw top">#bounty</span> issues on tangled.org into an open race — claim one with a PR, win the merge, and earn Gold Knots that build a portable, cryptographically signed track record.</p>
         <div class="concept-steps">
           <span class="step">🏷️ Owner tags #bounty</span>
           <span class="arrow">→</span>
@@ -169,7 +170,7 @@
           <div class="sidebar-card">
             <div class="sidebar-title">About</div>
             <p style="font-size:0.8125rem;color:var(--text-secondary)">
-              Bounty Hunt reads live issues from
+              Knotch reads live issues from
               <a href="https://tangled.org" target="_blank" rel="noopener">tangled.org</a>
               via AT Protocol XRPC. Awards are cryptographically signed and
               portable across the AT Protocol network.
@@ -183,7 +184,7 @@
 
   <footer class="footer">
     <div class="container footer-inner">
-      <span class="footer-brand">🎯 Bounty Hunt</span>
+      <span class="footer-brand"><span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span></span>
       <span class="footer-tag">Hunt open-source bounties · earn Gold Knots 🪙</span>
       <nav class="footer-links">
         <a href="https://tangled.org" target="_blank" rel="noopener">tangled.org ↗</a>

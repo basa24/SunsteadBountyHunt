@@ -301,7 +301,7 @@ function initCollapsibles() {
 // ── Init ──────────────────────────────────────────────────────────────────
 
 function renderProfile(profile, { self }) {
-  document.title = `@${profile.handle} — Bounty Hunt Profile`;
+  document.title = `@${profile.handle} — Knotch Profile`;
   renderHeader(profile, { self });
   renderStats(profile);
   renderSkillBars(profile);
