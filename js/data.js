@@ -4,8 +4,8 @@
 // handle here so all three stations tally each other's Gold Knots every cycle.
 export const LEADERBOARD_SEED_HANDLES = [
   'karakoz.tngl.sh',
-  // 'second-hunter.tngl.sh',
-  // 'third-hunter.tngl.sh',
+  'borbor84.tngl.sh',
+  'basa24.bsky.social',
 ];
 
 // Seed repos to scan on tangled.org (handles resolved to DIDs at runtime)

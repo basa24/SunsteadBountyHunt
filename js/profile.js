@@ -137,35 +137,36 @@ function renderAwardCard(award, idx) {
   return `
     <div class="award-card" id="award-${idx}">
       <div class="award-top">
-        <div>
+        <div class="award-head">
           <div class="award-title">
             <a href="bounty.html?id=${escHtml(award.bountyId)}">${escHtml(award.bountyTitle)}</a>
           </div>
-          <div class="award-meta mt-1">
+          <div class="award-meta">
             <a href="${escHtml(award.repoUrl || '#')}" target="_blank" rel="noopener" class="text-secondary">
               ${escHtml(award.repoHandle)}/${escHtml(award.repo)}
             </a>
+            <span class="award-meta-dot">·</span>
             <span>${fmtDate(award.awardedAt)}</span>
           </div>
         </div>
-        <div class="flex flex-col items-end gap-1">
+        <div class="award-reward">
           <span class="points-badge" title="${award.points} Gold Knots">+${award.points} GK</span>
           <span class="diff-badge ${diffClass(award.difficulty)} text-xs">${award.difficulty} · ${DIFFICULTY_LABELS[award.difficulty]}</span>
         </div>
       </div>
 
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="bounty-tags">${kwHtml}</div>
-        <div class="flex items-center gap-2">
-          ${prHtml}
+      ${kwHtml ? `<div class="bounty-tags award-tags">${kwHtml}</div>` : ''}
+
+      <div class="award-foot">
+        <div class="award-attest">
           ${verifiedHtml}
+          <span class="award-meta-dot">·</span>
+          <span class="text-xs text-muted">authority <strong class="text-secondary">${award.authorityWeight ?? '–'}</strong> · by ${escHtml(award.awardedByHandle || award.awardedBy)}</span>
+        </div>
+        <div class="award-actions">
+          ${prHtml}
           <button class="btn btn-ghost btn-sm" data-verify-idx="${idx}">Verify ↗</button>
         </div>
-      </div>
-
-      <div class="text-xs text-muted">
-        Authority weight: <strong>${award.authorityWeight ?? '–'}</strong>
-        · Awarded by <strong>${escHtml(award.awardedByHandle || award.awardedBy)}</strong>
       </div>
 
       <div id="verify-result-${idx}" class="hidden"></div>

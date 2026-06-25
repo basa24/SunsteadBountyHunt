@@ -292,7 +292,7 @@ function renderPRSection(bounty) {
           <div class="notice notice-warn mb-3">Sign in on the main page to take bounties and collect Gold Knots.</div>
         ` : (!trackable ? `
           <div class="notice notice-warn mb-3">This is a demo/mock bounty — it has no real tangled repo.</div>
-        ` : `<button class="btn btn-primary btn-lg w-full" id="pr-start-btn">Accept bounty &amp; get my token</button>`)}
+        ` : `<button class="btn btn-primary btn-lg w-full" id="pr-start-btn">Start Hunting</button>`)}
       </div>
     </div>
   `;
