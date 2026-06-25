@@ -6,22 +6,28 @@
 // records network-wide and surface any that carry our #bounty tag.
 
 import { isBountyIssue, issueRecordToBounty, getRepoNamesForDid, isClosedState, PLC_BASE } from './fetcher.js';
+import { addSubmissionToPool } from './storage.js';
 
 const JETSTREAM_HOSTS = [
   'wss://jetstream2.us-east.bsky.network/subscribe',
   'wss://jetstream1.us-east.bsky.network/subscribe',
   'wss://jetstream2.us-west.bsky.network/subscribe',
 ];
-const ISSUE_COLLECTION = 'sh.tangled.repo.issue';
-const STATE_COLLECTION = 'sh.tangled.repo.issue.state';
-const WANTED_COLLECTIONS = [ISSUE_COLLECTION, STATE_COLLECTION];
+const ISSUE_COLLECTION      = 'sh.tangled.repo.issue';
+const STATE_COLLECTION      = 'sh.tangled.repo.issue.state';
+const SUBMISSION_COLLECTION = 'sh.tangled.bounty.submission';
+const AWARD_COLLECTION      = 'sh.tangled.bounty.award';
+const WANTED_COLLECTIONS = [
+  ISSUE_COLLECTION, STATE_COLLECTION,
+  SUBMISSION_COLLECTION, AWARD_COLLECTION,
+];
 
 // Cache did → handle so we don't re-resolve for every event from the same repo.
 const _handleCache = new Map();
 // Cache did → repoName map so we don't re-fetch repo records per event.
 const _repoNameCache = new Map();
 
-async function resolveHandleForDid(did) {
+export async function resolveHandleForDid(did) {
   if (_handleCache.has(did)) return _handleCache.get(did);
   let handle = did;
   try {
@@ -47,10 +53,12 @@ async function resolveRepoName(did, repoRef) {
   return _repoNameCache.get(did).get(repoRef);
 }
 
-// connectFirehose(onBounty, { onStatus, onClose }) → streams newly-created
-// #bounty issues to onBounty(bounty); calls onClose(issueUri) when an issue is
-// closed. Returns { disconnect }.
-export function connectFirehose(onBounty, { onStatus, onClose } = {}) {
+// connectFirehose(onBounty, { onStatus, onClose, onSubmission, onAward }) →
+// streams newly-created #bounty issues to onBounty(bounty); calls
+// onClose(issueUri) when an issue is closed; calls onSubmission(submission)
+// and onAward(award) when bounty submission/award records appear network-wide.
+// Returns { disconnect }.
+export function connectFirehose(onBounty, { onStatus, onClose, onSubmission, onAward } = {}) {
   let ws = null;
   let closed = false;
   let attempt = 0;
@@ -102,10 +110,14 @@ export function connectFirehose(onBounty, { onStatus, onClose } = {}) {
   async function handleEvent(msg) {
     if (msg.kind !== 'commit') return;
     const c = msg.commit;
-    if (!c || c.operation !== 'create') return;
+    if (!c) return;
+    // Accept both 'create' and 'update' for submission/award so a status flip
+    // (pending→awarded) propagates. Issues are create-only.
+    const op = c.operation;
 
     // Issue closed → tell the app to drop it from the feed.
     if (c.collection === STATE_COLLECTION) {
+      if (op !== 'create') return;
       const v = c.record || {};
       if (v.issue && isClosedState(v.state)) {
         try { onClose?.(v.issue); } catch { /* ignore */ }
@@ -113,6 +125,48 @@ export function connectFirehose(onBounty, { onStatus, onClose } = {}) {
       return;
     }
 
+    // Bounty submission record (any hunter, any device).
+    if (c.collection === SUBMISSION_COLLECTION) {
+      if (op !== 'create' && op !== 'update') return;
+      const v = c.record || {};
+      if (!v.bounty || !v.bountyId) return;
+      let handle = msg.did;
+      try { handle = await resolveHandleForDid(msg.did); } catch { /* fallback */ }
+      const sub = {
+        uri: `at://${msg.did}/${c.collection}/${c.rkey}`,
+        cid: c.cid,
+        bountyId: v.bountyId,
+        bountyUri: v.bounty,
+        token: v.token,
+        authorDid: msg.did,
+        authorHandle: handle,
+        ownerHandle: v.repo?.handle,
+        repoName: v.repo?.name,
+        repoDid: v.repo?.repoDid,
+        status: v.status || 'pending',
+        startedAt: v.startedAt,
+        resolvedAt: v.resolvedAt,
+        prNumber: v.prNumber,
+        _live: true,
+      };
+      addSubmissionToPool(sub);
+      try { onSubmission?.(sub); } catch { /* ignore */ }
+      return;
+    }
+
+    // Bounty award record (resolved hunts network-wide). We don't aggregate
+    // these into anything yet — just hand to the caller for display.
+    if (c.collection === AWARD_COLLECTION) {
+      if (op !== 'create') return;
+      try { onAward?.({
+        uri: `at://${msg.did}/${c.collection}/${c.rkey}`,
+        cid: c.cid,
+        value: c.record,
+      }); } catch { /* ignore */ }
+      return;
+    }
+
+    if (op !== 'create') return;
     if (c.collection !== ISSUE_COLLECTION) return;
 
     // Reconstruct an atproto record shape for the existing helpers.
