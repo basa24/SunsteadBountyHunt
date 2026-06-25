@@ -396,6 +396,14 @@ function rowSelector(token) {
   return `[data-sub-token="${CSS.escape(String(token))}"]`;
 }
 
+// Permalink to a specific PR on tangled — built from the bounty's repo and
+// the PR number we discovered (either stored on a resolved submission or
+// scraped via fetchPullStatuses).
+function prUrlFor(bounty, prNumber) {
+  if (!prNumber) return null;
+  return `${pullsUrl(bounty)}/${prNumber}`;
+}
+
 function renderSubmissionsList(bounty) {
   const section = document.getElementById('submissions-section');
   if (!section) return;
@@ -413,8 +421,11 @@ function renderSubmissionsList(bounty) {
     return;
   }
 
-  const rows = subs.map((s) => `
-    <li class="submission-row" data-sub-token="${escHtml(s.token || '')}">
+  const rows = subs.map((s) => {
+    const url = prUrlFor(bounty, s.prNumber);
+    const urlAttr = url ? ` data-pr-url="${escHtml(url)}"` : '';
+    return `
+    <li class="submission-row" data-sub-token="${escHtml(s.token || '')}"${urlAttr}>
       <div class="submission-top">
         <img class="avatar avatar-sm" src="${avatar(s.authorHandle || s.authorDid || 'anon')}" alt="" />
         <span class="submission-handle" data-handle-did="${escHtml(s.authorDid || '')}">${escHtml(s.authorHandle || s.authorDid || 'anon')}</span>
@@ -422,7 +433,8 @@ function renderSubmissionsList(bounty) {
         <span class="submission-score">${scoreBadgeHtml(mockScore(s))}</span>
       </div>
     </li>
-  `).join('');
+  `;
+  }).join('');
 
   section.innerHTML = `
     <div class="card mb-4 submissions-card">
@@ -437,7 +449,22 @@ function renderSubmissionsList(bounty) {
     </div>
   `;
 
+  // A row with a known PR number acts as a link to that PR on tangled. We
+  // delegate the click so rows added later (via the firehose or backfill
+  // re-render) get the behaviour for free, and use the auxclick path too so
+  // middle-click / cmd-click open in a background tab as expected.
+  section.addEventListener('click', onRowActivate);
+  section.addEventListener('auxclick', onRowActivate);
+
   hydrateSubmissionStates(bounty, subs);
+}
+
+function onRowActivate(e) {
+  const row = e.target.closest?.('.submission-row[data-pr-url]');
+  if (!row) return;
+  if (e.type === 'auxclick' && e.button !== 1) return; // middle-click only
+  e.preventDefault();
+  window.open(row.dataset.prUrl, '_blank', 'noopener');
 }
 
 async function hydrateSubmissionStates(bounty, subs) {
@@ -457,8 +484,14 @@ async function hydrateSubmissionStates(bounty, subs) {
   for (const sub of subs) {
     const row = document.querySelector(rowSelector(sub.token));
     if (!row) continue;
-    const { state } = matchPRForSubmission(sub, statuses);
+    const { state, entry } = matchPRForSubmission(sub, statuses);
     row.querySelector('.submission-state').innerHTML = statePillForSub(sub, state);
+    // If the scrape just told us this submission's PR number, light up the
+    // row's link affordance even though sub.prNumber wasn't stored.
+    if (!row.dataset.prUrl) {
+      const url = prUrlFor(bounty, sub.prNumber || entry?.number);
+      if (url) row.dataset.prUrl = url;
+    }
   }
 }
 

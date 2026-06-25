@@ -3045,6 +3045,12 @@ a.start-by:hover {
   background: var(--bg-card-hover);
 }
 
+/* When a PR has been discovered for the submission, the whole row acts as a
+   link to the PR on tangled (bounty.js#onRowActivate). */
+.submission-row[data-pr-url] { cursor: pointer; }
+.submission-row[data-pr-url]:hover { border-color: var(--text-muted); }
+.submission-row[data-pr-url]:hover .submission-handle { text-decoration: underline; }
+
 .submission-top {
   display: flex;
   align-items: center;
