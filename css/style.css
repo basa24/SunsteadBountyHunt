@@ -136,10 +136,10 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
   font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: 0.07em;
+  font-size: 1.25rem;
+  letter-spacing: 0.05em;
   line-height: 1;
   color: var(--text-primary);
   text-decoration: none;
@@ -147,6 +147,14 @@ button { font-family: inherit; cursor: pointer; }
   padding: 0.2rem 0.5rem;
   text-transform: uppercase;
   transition: transform 0.25s var(--ease-spring);
+}
+
+/* Brand wordmark in the header — slightly richer than plain white */
+.nav-logo .km {
+  background: linear-gradient(180deg, #ffffff 0%, #cdd7e1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .logo-main {
@@ -160,7 +168,7 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.56rem;
+  font-size: 0.6rem;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -1491,8 +1499,8 @@ button { font-family: inherit; cursor: pointer; }
 /* ── Concept hero (what is Knotch?) ── */
 .concept-hero {
   text-align: center;
-  padding: 2.25rem 1rem 1.75rem;
-  margin-bottom: 1.5rem;
+  padding: 2.25rem 1rem 2.25rem;
+  margin-bottom: 2.75rem;
   position: relative;
 }
 
@@ -1812,8 +1820,11 @@ body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
   0%, 100% { transform: scale(1);     }
   50%      { transform: scale(1.025); }
 }
-.start-by { font-size: 0.72rem; }
+.start-by { font-size: 0.72rem; margin-top: 0.15rem; }
 .start-by .tangled-wordmark { height: 18px; }
+/* intro "by tangled" is a real link out to tangled.org */
+a.start-by { text-decoration: none; cursor: pointer; transition: color 0.2s var(--ease-out); }
+a.start-by:hover { color: var(--teal); }
 
 .start-tag {
   color: var(--text-secondary);
