@@ -75,7 +75,7 @@ Key classes:
 - `AtpAgent` — Main client for XRPC calls
 - `BskyAgent` — Bluesky-specific client (extends AtpAgent)
 
-For our demo, we DON'T need the SDK — we're mocking the data layer. But it's the path to real integration.
+We don't use the SDK — we read live data with raw `fetch()` XRPC calls, and we *write* real records with app-password auth (`createSession` → `createRecord`) directly. The SDK remains the cleaner path once we move to full OAuth.
 
 ---
 
@@ -290,9 +290,10 @@ All AT Protocol records are publicly readable without auth. Tangled.org's AppVie
 
 ### Resolving a Handle to a DID
 ```
-GET https://tangled.org/xrpc/com.atproto.identity.resolveHandle?handle={handle}
+GET https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle={handle}
 → { "did": "did:plc:abc123" }
 ```
+> Note: `tangled.org/xrpc` 404s — tangled does **not** expose a public XRPC endpoint. Identity resolution goes through the Bluesky public API; record reads go directly against the owner's PDS (resolved via `plc.directory`).
 
 ### Getting a User's PDS Endpoint
 Once you have a DID, fetch its DID document to find where their PDS lives:
@@ -336,12 +337,9 @@ const isBounty = issue.value.body?.includes('#bounty')
 
 ### CORS Considerations
 Browser CORS policy may block direct `fetch()` calls to tangled.org or external PDS endpoints. Mitigation options:
-- **Option A (preferred for hackathon):** Use a lightweight Vite proxy in `vite.config.js`:
-  ```js
-  server: { proxy: { '/xrpc': 'https://tangled.org' } }
-  ```
-- **Option B:** Run a small Express proxy (`server/proxy.js`) that relays XRPC calls and adds CORS headers.
-- **Option C:** If tangled.org already sends `Access-Control-Allow-Origin: *` on XRPC endpoints (common for AT Protocol apps), no proxy needed.
+- **What we actually do (Option C confirmed):** the AT Protocol hosts we read from — `public.api.bsky.app`, `plc.directory`, and the owners' PDSes — all send `Access-Control-Allow-Origin: *`, so the core read/write path needs **no proxy at all**.
+- **The one proxy that matters — `/tnglweb` (dev-only):** tangled's *appview* is server-rendered HTML with no CORS and no JSON API, yet it's the only place issue open/closed state and PR merge status live. So `vite.config.js` proxies `/tnglweb/* → tangled.org` to scrape those pages in dev. This is unavailable in a static production build (so closed-issue filtering and PR reconciliation no-op there).
+- **Legacy:** the `/xrpc → tangled.org` proxy is kept as a fallback but is effectively dead, since `tangled.org/xrpc` 404s. There is no `server/` Express proxy — Vite's dev proxy covers everything.
 
 ### Caching Strategy
 Since we're fetching live data, cache aggressively in localStorage to avoid re-fetching on every page load:
@@ -417,10 +415,10 @@ In the demo: show the label badge UI on profile cards for flagged accounts (usin
 ## Constraints & Known Limitations
 
 ### Standalone App Constraints (Real Data, Simulated Writes)
-- **Reads are real:** Issues fetched live from tangled.org via XRPC
-- **Writes are simulated:** Award records stored in localStorage (real PDS write requires user AT Protocol OAuth — post-hackathon integration)
-- **Auth is soft:** User identity is set by entering a tangled.org handle; we resolve their DID and fetch their public profile/social graph. We do NOT have their private key.
-- **Signing is demo-mode:** Award signatures are generated with an ephemeral Web Crypto key pair to prove the model, not with the user's real AT Protocol key
+- **Reads are real:** Issues fetched live from owners' PDSes via `listRecords`, plus the Jetstream firehose for new ones.
+- **Writes are real:** `sh.tangled.bounty.post` / `.submission` / `.award` records are written to the logged-in user's PDS via `createRecord`. localStorage is a local mirror/cache, not the source of truth.
+- **Auth is app-password, not OAuth:** Users log in with an AT Protocol **app password** → a real `createSession` (`accessJwt`/`refreshJwt`). This grants record-write access to *their own* PDS, but it is not full OAuth and is **not** the DID signing key — and app passwords can't merge PRs, which is why awards rely on observing a real owner-merge.
+- **Signing is demo-mode:** Award signatures are generated with an ephemeral Web Crypto key pair to prove the model, not with the user's real AT Protocol key.
 - **No real AI API call by default:** Rule-based parser. Optional Claude API mode if a key is available
 - **CORS proxy required:** Vite dev proxy or small Express relay for XRPC calls
 
@@ -434,6 +432,7 @@ To integrate with tangled.org and the AT Protocol network for real:
    - Connect to a Relay's websocket subscription endpoint: `wss://bsky.network/xrpc/com.atproto.sync.subscribeRepos`
    - Filter the incoming CBOR-encoded event streams for repo writes with the collection type `sh.tangled.repo.issue`.
    - Inspect the record content. If the text has `#bounty`, pass it to the AI parser.
+   - *Status — partially implemented in the browser already.* `js/firehose.js` subscribes to the **Jetstream** JSON firehose (`wss://jetstream*.bsky.network/subscribe`) over a plain WebSocket with server-side `wantedCollections` filtering — no CBOR decoding, no auth, no CORS. A dedicated server-side subscriber bot is still the production move (history + reliability), and it must address the relay's blind spot for tngl.sh-hosted PDSes.
 3. **AppView (Bobbin) Indexing:**
    - Extend Bobbin (Tangled's AppView indexer) to consume the `sh.tangled.bounty.*` namespace.
    - Bobbin will index these postings and expose query APIs (like personalized recommended lists) to the tangled.org frontend.

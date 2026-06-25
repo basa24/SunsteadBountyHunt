@@ -295,6 +295,37 @@ export async function getRepoNamesForDid(did) {
 // network chatter; dial down for a snappier demo.
 export const OWNER_SCAN_TTL_MS = 15_000;
 
+// Resolve handle → { did, pds }, cached, so repeated leaderboard tallies don't
+// re-hit the identity + PLC directory every poll cycle.
+const _pdsResolveCache = new Map();
+async function resolveHandlePds(handle) {
+  const key = String(handle).trim().toLowerCase();
+  if (_pdsResolveCache.has(key)) return _pdsResolveCache.get(key);
+  const did = key.startsWith('did:') ? key : await resolveHandle(key);
+  const pds = await getPdsEndpoint(did);
+  const r = { did, pds };
+  _pdsResolveCache.set(key, r);
+  return r;
+}
+
+// Tally a handle's total Gold Knots from their sh.tangled.bounty.award records
+// and write it to the network leaderboard. Awards live on the *hunter's* own PDS,
+// so reading any handle's award collection gives their winnings — this is what
+// makes the leaderboard a real, cross-client view rather than local state.
+// Pass {did,pds} when already resolved (mid-scan) to skip the lookup.
+// Best-effort: returns { gk, count } or null.
+export async function tallyAwards(handle, resolved) {
+  try {
+    const { did, pds } = resolved || await resolveHandlePds(handle);
+    const awards = await listRecords(pds, did, 'sh.tangled.bounty.award', 100);
+    const gk = awards.reduce((s, r) => s + (r.value?.points || 0), 0);
+    setLeaderboardEntry(handle, { gk, count: awards.length });
+    return { gk, count: awards.length };
+  } catch {
+    return null; // no awards / unreadable → leave leaderboard untouched
+  }
+}
+
 // Scan one owner for all their OPEN #bounty issues (across every repo they own).
 async function fetchBountiesFromOwner(handle) {
   const cacheKey = `owner:${handle}`;
@@ -305,12 +336,7 @@ async function fetchBountiesFromOwner(handle) {
   const bounties = await readOpenBountyIssues(pds, did, handle);
 
   // Piggyback: tally this owner's Gold Knots for the network leaderboard.
-  // (Awards live on the hunter's own PDS; most discovered owners have none → 0.)
-  try {
-    const awards = await listRecords(pds, did, 'sh.tangled.bounty.award', 100);
-    const gk = awards.reduce((s, r) => s + (r.value?.points || 0), 0);
-    setLeaderboardEntry(handle, { gk, count: awards.length });
-  } catch { /* no awards / unreadable → leave leaderboard untouched */ }
+  await tallyAwards(handle, { did, pds });
 
   setFetchMeta(cacheKey);
   return bounties;

@@ -1,11 +1,11 @@
 import './brand.js';
 import { getBounties, getUserHandle, getUserProfile, setUserHandle, setUserProfile, clearUserHandle, addBounty, removeBountyByUri, addDiscoveredOwners, getLeaderboard } from './storage.js';
-import { fetchLiveBounties, fetchUserProfile, fetchUserBounties } from './fetcher.js';
+import { fetchLiveBounties, fetchUserProfile, fetchUserBounties, tallyAwards } from './fetcher.js';
 import { login, logout, isLoggedIn, getSession } from './auth.js';
 import { connectFirehose } from './firehose.js';
 import { reconcileSubmissions } from './pulls.js';
 import { rankBounties, extractAllSkills } from './ranking.js';
-import { DIFFICULTY_LABELS } from './data.js';
+import { DIFFICULTY_LABELS, LEADERBOARD_SEED_HANDLES } from './data.js';
 import { initCardSpotlight, runCountUps } from './juice.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -392,6 +392,13 @@ function wireProfileSearch() {
 async function init() {
   initStartScreen();
   initCardSpotlight();
+
+  // Always scan the configured demo participants for awards, so every client
+  // shows the same up-to-date leaderboard even for tngl.sh (non-relay) accounts
+  // the firehose can't see. They join the discovered-owner set, which the 15s
+  // live-refresh re-scans + re-tallies each cycle.
+  addDiscoveredOwners(LEADERBOARD_SEED_HANDLES);
+
   renderUserBanner();
   renderLeaderboard();
   wireProfileSearch();
@@ -550,6 +557,16 @@ function startFirehose() {
       onClose: (issueUri) => {
         // Issue was closed on the network — drop it from the feed.
         if (removeBountyByUri(issueUri)) applyFilters();
+      },
+      onAward: async (award) => {
+        // A hunt was won somewhere on the network (relay-indexed accounts only).
+        // Re-tally that hunter's PDS for an authoritative total, keep scanning
+        // them on the 15s cadence, and refresh the board instantly.
+        const handle = award.value?.hunterHandle;
+        if (!handle) return;
+        addDiscoveredOwners([handle]);
+        await tallyAwards(handle);
+        renderLeaderboard();
       },
     },
   );

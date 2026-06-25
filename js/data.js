@@ -1,3 +1,13 @@
+// Handles every client always scans for award records, so the network
+// leaderboard stays in sync across machines — even for tangled-hosted (tngl.sh)
+// accounts the Bluesky relay/firehose can't see. Add each demo participant's
+// handle here so all three stations tally each other's Gold Knots every cycle.
+export const LEADERBOARD_SEED_HANDLES = [
+  'karakoz.tngl.sh',
+  // 'second-hunter.tngl.sh',
+  // 'third-hunter.tngl.sh',
+];
+
 // Seed repos to scan on tangled.org (handles resolved to DIDs at runtime)
 export const SEED_REPOS = [
   { handle: 'karakoz.tngl.sh', repo: 'sunsteadboilerplate' },

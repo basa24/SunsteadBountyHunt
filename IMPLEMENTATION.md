@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build a **standalone production-ready web app** that reads live data from tangled.org via public AT Protocol XRPC APIs and layers a bounty system on top. This is not a visual clone or a mock-data demo — it fetches real issues from real tangled.org repos, parses them with the AI parser, and displays a personalized ranked bounty feed. Award recording is simulated in localStorage (real PDS writes require user OAuth, which is post-hackathon scope), but the data model and cryptographic verification scheme are production-correct.
+Build a **standalone production-ready web app** that reads live data from the AT Protocol network (the same network tangled.org is built on) and layers a bounty system on top. This is not a visual clone or a mock-data demo — it fetches real `sh.tangled.repo.issue` records straight from repo owners' PDSes (and live via the Jetstream firehose), parses them with the AI parser, and displays a personalized ranked bounty feed. Users sign in with an AT Protocol **app password**, and bounty / submission / award records are written for real to the logged-in user's PDS. The only piece still simulated is the award *signature*: it uses an ephemeral demo key pair (real `crypto.subtle` ECDSA) rather than the repo owner's actual DID key — the data model and verification shape are production-correct.
 
 The full loop: **fetch live issues → detect #bounty → AI parse → ranked feed → PR simulation → verifiable award → profile CV**.
 
@@ -20,8 +20,9 @@ Read `PHILOSOPHY.md` first for the vision and design principles.
 │  Tangled AppView (Bobbin) — aggregates & exposes XRPC APIs     │
 └────────────────────────────────────────────────────────────────┘
          │
-         │  Real XRPC fetch (com.atproto.repo.listRecords)
-         │  CORS handled via Vite proxy → /xrpc/* → tangled.org
+         │  Real reads, all CORS-enabled (no proxy): handle→DID via public.api.bsky.app,
+         │  DID→PDS via plc.directory, listRecords/getRecord direct to the owner's PDS.
+         │  Live discovery also via Jetstream firehose (WebSocket). tangled.org/xrpc 404s.
          ▼
 ┌────────────────────────────────────────────────────────────────┐
 │              OUR STANDALONE WEB APP (Vite + Vanilla JS)        │
@@ -54,14 +55,17 @@ Read `PHILOSOPHY.md` first for the vision and design principles.
 **What's real vs simulated:**
 | Layer | Status |
 |---|---|
-| Fetching issues from tangled.org repos | **Real** (XRPC) |
-| Resolving handles → DIDs | **Real** (XRPC) |
+| Fetching issues from repo owners' PDSes | **Real** (`listRecords`, direct to the PDS) |
+| Resolving handles → DIDs | **Real** (`public.api.bsky.app`, *not* tangled.org/xrpc) |
+| Live discovery via firehose | **Real** (Jetstream WebSocket; blind to tngl.sh-hosted PDSes — see note) |
 | Fetching user social graph (follows, stars) | **Real** (XRPC, public) |
 | AI parsing of issue text | **Real** (rule-based, optional Claude API) |
 | Ranking algorithm | **Real** (runs on live fetched data) |
-| Bounty award records | **Simulated** (localStorage, correct schema) |
-| Cryptographic signatures on awards | **Demo** (ephemeral Web Crypto key, real `crypto.subtle.sign/verify`) |
-| Writing award to user's PDS | **Not yet** (requires AT Protocol OAuth) |
+| User sign-in | **Real** (AT Protocol app password → `com.atproto.server.createSession`) |
+| Bounty / submission / award records | **Real** writes to the logged-in user's PDS (overlay collections only this app consumes) |
+| How an award is earned | **Real** observed owner-merge of a token-tagged PR (see Award Flow), not a button click |
+| Cryptographic signatures on awards | **Demo** (ephemeral Web Crypto key, real `crypto.subtle.sign/verify`; *not* the owner's DID key) |
+| Issue open/closed + PR merge state | **Real** but **dev-only** (scraped from tangled's server-rendered HTML via `/tnglweb`; no JSON API) |
 
 
 ---
@@ -80,21 +84,25 @@ Sunstead/
 ├── css/
 │   └── style.css           # Full design system
 ├── js/
-│   ├── app.js              # Feed page logic: fetch → rank → render
-│   ├── create.js           # Issue URL input + parsing UI
-│   ├── bounty.js           # Detail page logic + PR simulation
-│   ├── profile.js          # Profile rendering + verification UI
-│   ├── fetcher.js          # XRPC client: fetch issues, resolve DIDs/handles
+│   ├── app.js              # Feed page logic: fetch → rank → render + firehose wiring
+│   ├── create.js           # Issue URL input + parsing UI + publish bounty post
+│   ├── bounty.js           # Detail page logic + submission/award flow
+│   ├── profile.js          # Profile rendering + verification UI + leaderboard
+│   ├── fetcher.js          # Read path: resolve DIDs/handles, listRecords, /tnglweb scrape
+│   ├── firehose.js         # Live read path: Jetstream WebSocket subscription
+│   ├── auth.js             # Real AT Protocol sessions via app passwords
+│   ├── pds.js              # Authenticated write path: createRecord / uploadBlob
+│   ├── pulls.js            # Token-gated PR submission + award reconciliation
 │   ├── ai-parser.js        # Rule-based parser (+ optional Claude API mode)
 │   ├── ranking.js          # Proximity + skill ranking algorithm
 │   ├── signer.js           # Web Crypto: demo signing + award verification
-│   ├── storage.js          # localStorage: XRPC cache + simulated PDS state
+│   ├── repo-verify.js      # DID-backed provenance check of source issue records
+│   ├── storage.js          # localStorage: XRPC cache + local mirror of PDS state
+│   ├── brand.js / juice.js / navchip.js  # Branding + cosmetic effects + account chip
 │   └── data.js             # Seed repo list + fallback mock data
-├── server/
-│   ├── proxy.js            # CORS proxy for XRPC calls (Express)
-│   └── parser.js           # Claude API proxy for AI parsing
 ├── package.json
-└── vite.config.js          # Multi-page config + /xrpc CORS proxy
+└── vite.config.js          # Multi-page config + /xrpc, /plc, /tnglweb dev proxies
+                            # (CORS handled by the Vite dev proxy — no separate server/)
 ```
 
 ---
@@ -225,7 +233,8 @@ The fetcher handles all communication with tangled.org's AT Protocol endpoints.
 // Resolve a tangled handle → DID
 async function resolveHandle(handle)
 // → { did: "did:plc:..." }
-// GET /xrpc/com.atproto.identity.resolveHandle?handle={handle}
+// GET https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle={handle}
+// (tangled.org/xrpc 404s — identity resolution goes through the Bluesky public API)
 
 // Get a user's PDS endpoint from their DID document
 async function getPdsEndpoint(did)
@@ -258,12 +267,13 @@ async function computeAuthorityWeight(repoHandle, repoDid, pdsEndpoint)
 
 **Error handling:** Network errors or CORS failures fall through to `data.js` fallback mock records for that repo. The UI shows a subtle "Live data unavailable — showing cached/demo data" notice.
 
-**Vite proxy config** (`vite.config.js`):
+**Vite proxy config** (`vite.config.js`): The core reads (identity, PLC, PDS `listRecords`/`getRecord`) hit CORS-enabled hosts directly and need **no proxy**. Since `tangled.org/xrpc` 404s, the `/xrpc` proxy is legacy/fallback only. The load-bearing one is **`/tnglweb`** — it proxies tangled's server-rendered HTML pages, the *only* source of issue open/closed state and PR merge status (tangled exposes no JSON API for these). It is **dev-only**, so features that depend on it (closed-issue filtering, PR reconciliation) silently no-op in a static production build.
 ```js
 server: {
   proxy: {
-    '/xrpc': { target: 'https://tangled.org', changeOrigin: true },
-    '/plc':  { target: 'https://plc.directory', changeOrigin: true, rewrite: p => p.replace(/^\/plc/, '') }
+    '/xrpc':    { target: 'https://tangled.org',   changeOrigin: true, secure: true },                       // legacy/fallback
+    '/plc':     { target: 'https://plc.directory',  changeOrigin: true, rewrite: p => p.replace(/^\/plc/, '') },
+    '/tnglweb': { target: 'https://tangled.org',    changeOrigin: true, rewrite: p => p.replace(/^\/tnglweb/, '') }, // scrape issue/PR state (dev-only)
   }
 }
 ```
@@ -438,9 +448,11 @@ Two input modes — user picks one:
   - All 10 keywords (top 3 highlighted)
   - Difficulty badge + description text
   - Creation date, repo stars, authority weight, estimated points value
-- "Submit PR" action button:
-  - Click: → PR submission animation
-  - Simulates: PR merged → `signer.js` generates demo key pair → signs award record → `storage.addAward()` + `storage.updateProfile()`
+- "Start the hunt" action button (the real Award Flow — `js/pulls.js`):
+  - Click: `startSubmission()` mints an unguessable `HuntRequest#<hex>` token (~48 bits) and writes a `sh.tangled.bounty.submission` record to the hunter's PDS so others see the hunt
+  - The hunter opens a PR **on the real tangled repo** with that token in the PR title (app passwords can't merge PRs, so we can't award directly — we *observe* a real merge)
+  - `reconcileSubmissions()` scrapes the repo's pulls pages via `/tnglweb`; when the token-bearing PR is **merged** AND the page lists the hunter's DID as author, it fires the award
+  - Award path: `signer.createSignedAward()` signs `(bountyUri, pullRequestUri, hunterDid, awardedAt)` with the demo key → `pds.publishAwardRecord()` writes the real `sh.tangled.bounty.award` to the hunter's PDS → `storage.addAward()`
   - Shows: "Bounty awarded! Points: {N}" + link to profile
   - Shows: verification badge ("✓ Cryptographically signed") which opens the verification panel
 - Verification Panel (inline):
@@ -698,7 +710,7 @@ The demo should support this 3–5 minute walkthrough:
 4. **Click Parse** → Watch keywords animate in, top 3 highlight, difficulty appears, authority weight + points value shown
 5. **Click Add to Feed** → Return to main page, new bounty appears
 6. **Click a bounty** → Full details, link back to real tangled.org issue, all keywords
-7. **Click Submit PR** → Success animation → "Here's the cryptographic proof:"
+7. **Start the hunt** → app issues a unique `HuntRequest#…` token → open a PR on the real tangled repo with that token in the title → the app scrapes the repo's pulls, sees the owner-merged PR (author-matched), and awards you → "Here's the cryptographic proof:"
 8. **Show verification panel** → Raw award JSON, signature bytes, click "Verify Signature" → "✓ Passes `crypto.subtle.verify()` — this award cannot be forged without the repo owner's private key"
 9. **Navigate to Profile** → New award in list with verified badge, points tally, authority weight explanation
-10. **Show AT Protocol schemas** → "When tangled merges this, these localStorage writes become real XRPC writes to the user's PDS — the rest of the code stays identical"
+10. **Show AT Protocol schemas** → "These `sh.tangled.bounty.*` records are already written for real to your PDS via app-password auth. When tangled's appview adopts the namespace it just starts indexing them — and the demo signature gets swapped for the owner's real DID key. The rest of the code stays identical."
