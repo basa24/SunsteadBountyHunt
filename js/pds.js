@@ -64,6 +64,44 @@ export async function submitPullRecord({ repoDid, branch = 'main', title, body =
   return createRecord('sh.tangled.repo.pull', record);
 }
 
+// Write a submission record (sh.tangled.bounty.submission) when a hunter accepts
+// a bounty and is issued a token. Lets any viewer (not just the hunter's own
+// device) see who is on the hunt for a given bounty, and lets us update the
+// record's status when the PR resolves. Returns { uri, cid }.
+export async function publishSubmissionRecord(submission) {
+  return createRecord('sh.tangled.bounty.submission', {
+    bounty: submission.bountyUri,
+    bountyId: submission.bountyId,
+    token: submission.token,
+    repo: {
+      handle: submission.ownerHandle,
+      name: submission.repoName,
+      repoDid: submission.repoDid,
+    },
+    status: submission.status || 'pending',
+    startedAt: submission.startedAt || new Date().toISOString(),
+  });
+}
+
+// Overwrite an existing submission record (rkey-keyed) when its status flips —
+// e.g. the hunter's PR was merged (awarded) or closed (declined). Pass the
+// full record fields; this is a putRecord, not a partial patch.
+export async function updateSubmissionRecord(submissionUri, record) {
+  const session = getSession();
+  if (!session) throw new Error('Must be logged in to update records.');
+  const m = String(submissionUri || '').match(/^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/);
+  if (!m) throw new Error('updateSubmissionRecord: bad at-uri');
+  const [, repoDid, collection, rkey] = m;
+  if (repoDid !== session.did) throw new Error('Can only update own submission records.');
+  const body = {
+    repo: session.did,
+    collection,
+    rkey,
+    record: { $type: collection, ...record },
+  };
+  return authedFetch('com.atproto.repo.putRecord', { method: 'POST', body });
+}
+
 // Write a bounty post (sh.tangled.bounty.post) from a parsed bounty object.
 export async function publishBountyRecord(bounty) {
   return createRecord('sh.tangled.bounty.post', {
