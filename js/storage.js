@@ -60,6 +60,16 @@ export function markBountyCompleted(bountyId, hunterHandle) {
   }
 }
 
+// Remove a bounty by its source issue URI (e.g. when the issue is closed).
+// Returns true if something was removed.
+export function removeBountyByUri(issueUri) {
+  const bounties = getBounties();
+  const next = bounties.filter(b => b.issueUri !== issueUri);
+  if (next.length === bounties.length) return false;
+  writeJSON(KEYS.BOUNTIES, next);
+  return true;
+}
+
 // Merge freshly fetched live bounties into the store, keeping local additions
 export function mergeLiveBounties(liveBounties) {
   const current = getBounties();
@@ -116,39 +126,47 @@ export function getAwards() {
   return profile?.awards || [];
 }
 
+// Recompute the aggregate bountyProfile stats from a full award list. Used both
+// when adding a new award and when hydrating awards back from the PDS, so the
+// numbers are always derived from the same source of truth (the award list).
+export function computeBountyProfile(awards, prevPublic = true) {
+  const skillBreakdown = {};
+  for (const a of awards) {
+    for (const skill of (a.skills || [])) {
+      skillBreakdown[skill] = (skillBreakdown[skill] || 0) + 1;
+    }
+  }
+  const totalCompleted = awards.length;
+  const totalPoints = awards.reduce((s, a) => s + (a.points || 0), 0);
+  const avgDifficulty = totalCompleted
+    ? +(awards.reduce((s, a) => s + (a.difficulty || 0), 0) / totalCompleted).toFixed(1)
+    : 0;
+  return {
+    skillBreakdown,
+    totalCompleted,
+    totalPoints,
+    avgDifficulty,
+    completionStreak: computeStreak(awards),
+    public: prevPublic,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
 export function addAward(award) {
   const profile = getUserProfile();
   if (!profile) return;
 
   const awards = profile.awards || [];
-  awards.unshift(award);
-
-  // Recompute skill breakdown and stats
-  const bp = profile.bountyProfile || {};
-  const skills = { ...bp.skillBreakdown };
-  for (const skill of award.skills) {
-    skills[skill] = (skills[skill] || 0) + 1;
-  }
-
-  const totalCompleted = awards.length;
-  const totalPoints = awards.reduce((s, a) => s + (a.points || 0), 0);
-  const avgDifficulty = awards.reduce((s, a) => s + a.difficulty, 0) / totalCompleted;
-
-  // Simple streak: consecutive days with at least one award
-  const streak = computeStreak(awards);
+  // Avoid duplicates if the same award (by PDS uri or bountyId) is re-added.
+  const exists = awards.some(a =>
+    (award.uri && a.uri === award.uri) ||
+    (award.bountyId && a.bountyId === award.bountyId));
+  if (!exists) awards.unshift(award);
 
   const updated = {
     ...profile,
     awards,
-    bountyProfile: {
-      ...bp,
-      skillBreakdown: skills,
-      totalCompleted,
-      totalPoints,
-      avgDifficulty: +avgDifficulty.toFixed(1),
-      completionStreak: streak,
-      lastUpdated: new Date().toISOString(),
-    },
+    bountyProfile: computeBountyProfile(awards, profile.bountyProfile?.public ?? true),
   };
   writeJSON(KEYS.USER_PROFILE, updated);
   return updated;

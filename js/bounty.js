@@ -1,6 +1,9 @@
 import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward } from './storage.js';
 import { createSignedAward, verifyAward, truncateHex } from './signer.js';
+import { isLoggedIn, getSession } from './auth.js';
+import { publishAwardRecord } from './pds.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
+import { renderNavChip } from './navchip.js';
 
 // ── URL param ─────────────────────────────────────────────────────────────
 
@@ -80,7 +83,7 @@ function renderBounty(bounty) {
             <div class="text-xs text-muted">${escHtml(bounty.repo?.name || '?')} · ⭐ ${bounty.repo?.stars ?? '–'}</div>
           </div>
         </div>
-        <span class="points-badge" style="font-size:1rem">+${pts} pts</span>
+        <span class="points-badge" style="font-size:1rem" title="${pts} Gold Knots">+${pts} GK</span>
       </div>
       <div class="card-body">
         <div class="issue-body"><p>${renderMarkdown(bounty.issueBody || '(No body)')}</p></div>
@@ -147,8 +150,7 @@ function renderBounty(bounty) {
 
 function renderPRSection(bounty) {
   const section = document.getElementById('pr-section');
-  const profile = getUserProfile();
-  const handle  = getUserHandle();
+  const loggedIn = isLoggedIn();
 
   if (bounty.status === 'completed') {
     section.innerHTML = `
@@ -168,10 +170,10 @@ function renderPRSection(bounty) {
             ${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}
           </a> referencing this issue. When the owner merges it, your award is recorded.
         </p>
-        ${!handle ? `
-          <div class="notice notice-warn mb-3">Connect your tangled.org handle on the main page to claim awards.</div>
+        ${!loggedIn ? `
+          <div class="notice notice-warn mb-3">Sign in on the main page to claim awards (writes a signed record to your PDS).</div>
         ` : ''}
-        <button class="btn btn-primary btn-lg w-full" id="pr-btn" ${!handle ? 'disabled' : ''}>
+        <button class="btn btn-primary btn-lg w-full" id="pr-btn" ${!loggedIn ? 'disabled' : ''}>
           Simulate PR Merge & Claim Award
         </button>
         <p class="text-xs text-muted mt-2 text-center">
@@ -190,18 +192,30 @@ async function simulatePR(bounty) {
   btn.innerHTML = '<span class="spinner"></span> Processing…';
 
   const profile = getUserProfile();
-  const handle  = getUserHandle();
+  const session = getSession();
+  const handle  = session?.handle || getUserHandle();
 
-  await new Promise(r => setTimeout(r, 1200)); // simulate network
+  await new Promise(r => setTimeout(r, 600)); // brief pacing before the write
 
-  // Create cryptographically signed award
+  // Create cryptographically signed award (demo signature, kept for the
+  // verification panel below).
   const award = await createSignedAward({
     bounty,
-    hunterDid:    profile?.did || `did:plc:demo-${handle}`,
+    hunterDid:    session?.did || profile?.did,
     hunterHandle: handle,
   });
 
-  // Store in local simulated PDS
+  // Write a REAL sh.tangled.bounty.award record to the hunter's PDS.
+  let recordUri = null;
+  try {
+    const { uri } = await publishAwardRecord(award);
+    recordUri = uri;
+    award.uri = uri;
+  } catch (e) {
+    console.warn('Award PDS write failed, kept local copy:', e.message);
+  }
+
+  // Cache locally for the profile page / instant UI.
   addAward(award);
   markBountyCompleted(bounty.id, handle);
 
@@ -209,12 +223,18 @@ async function simulatePR(bounty) {
   const section = document.getElementById('pr-section');
   section.innerHTML = `
     <div class="success-panel mb-4">
-      <div class="success-icon">🎉</div>
-      <div class="success-title">Bounty Awarded!</div>
-      <div class="success-sub">
-        +${award.points} pts · ${escHtml(bounty.topKeywords?.join(', ') || '')}
+      <div class="success-icon">🪙</div>
+      <div class="success-title">Gold Knots Minted!</div>
+      <div class="success-sub flex flex-col items-center gap-2">
+        <span class="points-badge lg gk-pop" style="font-size:1.125rem">+${award.points} Gold Knots</span>
+        <span>${escHtml(bounty.topKeywords?.join(', ') || '')}</span>
       </div>
-      <a href="profile.html" class="btn btn-primary">View Your Profile →</a>
+      ${recordUri ? `
+        <div class="text-xs text-muted mt-1" style="word-break:break-all">
+          ✓ Written to your PDS: <code>${escHtml(recordUri)}</code>
+        </div>` : `
+        <div class="text-xs text-muted mt-1">Saved locally (PDS write unavailable).</div>`}
+      <a href="profile.html" class="btn btn-primary mt-2">View Your Profile →</a>
     </div>
   `;
 
@@ -324,4 +344,5 @@ function init() {
   renderPRSection(bounty);
 }
 
+renderNavChip();
 init();

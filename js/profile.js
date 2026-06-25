@@ -1,6 +1,7 @@
 import { getUserProfile, getUserHandle, updateUserProfile } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { DIFFICULTY_LABELS } from './data.js';
+import { renderNavChip } from './navchip.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -65,8 +66,8 @@ function renderStats(profile) {
         <div class="stat-label">Completed</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value">${bp.totalPoints || 0}</div>
-        <div class="stat-label">Total Points</div>
+        <div class="stat-value">🪙 ${bp.totalPoints || 0}</div>
+        <div class="stat-label">Gold Knots</div>
       </div>
       <div class="stat-item">
         <div class="stat-value">${(bp.avgDifficulty || 0).toFixed(1)}</div>
@@ -134,7 +135,7 @@ function renderAwardCard(award, idx) {
           </div>
         </div>
         <div class="flex flex-col items-end gap-1">
-          <span class="points-badge">+${award.points} pts</span>
+          <span class="points-badge" title="${award.points} Gold Knots">+${award.points} GK</span>
           <span class="diff-badge ${diffClass(award.difficulty)} text-xs">${award.difficulty} · ${DIFFICULTY_LABELS[award.difficulty]}</span>
         </div>
       </div>
@@ -253,4 +254,5 @@ function init() {
   initCollapsibles();
 }
 
+renderNavChip();
 init();

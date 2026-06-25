@@ -1,6 +1,7 @@
 import { parseIssue, parseIssueWithAPI } from './ai-parser.js';
 import { fetchIssueByUrl } from './fetcher.js';
 import { addBounty, getUserHandle } from './storage.js';
+import { isLoggedIn, publishBountyRecord } from './pds.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
 
 // ── Tab switching ─────────────────────────────────────────────────────────
@@ -117,8 +118,26 @@ async function showResults(parsed, issueData = {}) {
     fetchedAt: new Date().toISOString(),
   };
 
-  document.getElementById('publish-btn').addEventListener('click', () => {
+  document.getElementById('publish-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('publish-btn');
+
+    // Always cache locally for instant feed display.
     addBounty(bountyData);
+
+    // If logged in, also write a real sh.tangled.bounty.post to the user's PDS.
+    if (isLoggedIn()) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Publishing…';
+      try {
+        const { uri } = await publishBountyRecord(bountyData);
+        bountyData.uri = uri;
+        addBounty(bountyData); // upsert with the real record URI
+      } catch (e) {
+        // Non-fatal: the bounty is already in the local feed.
+        console.warn('PDS write failed, kept local copy:', e.message);
+      }
+    }
+
     window.location.href = 'index.html';
   });
 }

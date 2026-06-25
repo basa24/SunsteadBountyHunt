@@ -10,18 +10,17 @@
 
   <nav class="nav">
     <div class="container nav-inner">
-      <div class="nav-left nav-links">
-        <span class="live-indicator" id="live-notice" data-state="loading">
-          <span class="live-dot"></span><span class="live-label">Connecting…</span>
-        </span>
-        <a href="index.html" class="nav-link active">Feed</a>
-      </div>
-      <a href="index.html" class="nav-center nav-logo">
+      <a href="index.html" class="nav-logo">
         <span class="logo-icon">🎯</span>
         Bounty Hunt
         <span class="logo-badge">alpha</span>
       </a>
-      <div class="nav-right nav-user" id="nav-user">
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">Feed</a>
+        <a href="create.html" class="nav-link">+ Add Bounty</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+      </div>
+      <div class="nav-right" id="nav-user">
         <span class="text-muted text-sm">Not connected</span>
       </div>
     </div>
@@ -29,20 +28,6 @@
 
   <div class="main-content">
     <div class="container">
-
-      <!-- Concept hero -->
-      <header class="concept-hero">
-        <h1>Hunt with PRs. <span class="accent">Earn Gold Knots 🪙</span></h1>
-        <div class="concept-steps">
-          <span class="step">🏷️ Owner tags #bounty</span>
-          <span class="arrow">→</span>
-          <span class="step">🎯 Lands in your feed</span>
-          <span class="arrow">→</span>
-          <span class="step">🛠️ You ship a PR</span>
-          <span class="arrow">→</span>
-          <span class="step">🪙 Earn Gold Knots</span>
-        </div>
-      </header>
 
       <!-- User onboarding banner -->
       <div class="handle-banner" id="user-banner">
@@ -63,13 +48,14 @@
         <p class="notice notice-warn mt-1 hidden" id="login-error"></p>
       </div>
 
+      <!-- Live data notice -->
+      <div class="notice mb-3" id="live-notice">
+        ⏳ Fetching live bounties from tangled.org…
+      </div>
+
       <div class="layout-cols">
         <!-- Main feed -->
         <div>
-          <div class="feed-header">
-            <h2 class="feed-title">🎯 Hunts picked for you</h2>
-            <p class="feed-sub">Ranked to match your skills · your top 8 today</p>
-          </div>
           <div class="filter-bar">
             <span class="filter-label">Filter:</span>
             <select class="filter-select" id="skill-filter">
@@ -99,27 +85,35 @@
         <!-- Sidebar -->
         <aside class="sidebar">
           <div class="sidebar-card">
-            <div class="sidebar-title">How The Hunt Works</div>
+            <div class="sidebar-title">How It Works</div>
             <ol style="padding-left:1.25rem;display:flex;flex-direction:column;gap:0.5rem;font-size:0.8125rem;color:var(--text-secondary)">
               <li>Repo owner posts an issue with <span class="kw top">#bounty</span></li>
               <li>AI detects it, extracts keywords + difficulty</li>
-              <li>Bounty appears in your personalized feed</li>
+              <li>Bounty appears in personalized feed</li>
               <li>Hunter submits a PR — code is the claim</li>
-              <li>Owner merges → a signed award mints <strong class="text-gold">Gold Knots</strong> 🪙</li>
+              <li>Owner merges → cryptographically signed award</li>
             </ol>
           </div>
 
           <div class="sidebar-card">
-            <div class="sidebar-title">Gold Knots 🪙</div>
-            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.75rem">
-              The currency of the hunt. Land a merged PR and the owner's signed
-              award mints <strong class="text-gold">Gold Knots</strong> into your profile —
-              scaled by the bounty's difficulty and the repo's authority.
-            </p>
-            <div class="flex items-center justify-between" style="font-size:0.8125rem;color:var(--text-secondary)">
-              <span>Harder bounty</span>
-              <span class="points-badge">more</span>
+            <div class="sidebar-title">Difficulty Scale</div>
+            <div style="display:flex;flex-direction:column;gap:0.375rem;font-size:0.8125rem">
+              <div class="diff-badge diff-1" style="width:fit-content">1 · Trivial</div>
+              <div class="diff-badge diff-2" style="width:fit-content">2 · Easy</div>
+              <div class="diff-badge diff-3" style="width:fit-content">3 · Medium</div>
+              <div class="diff-badge diff-4" style="width:fit-content">4 · Hard</div>
+              <div class="diff-badge diff-5" style="width:fit-content">5 · Expert</div>
             </div>
+          </div>
+
+          <div class="sidebar-card">
+            <div class="sidebar-title">Add a Bounty</div>
+            <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.75rem">
+              Paste a tangled.org issue URL or enter issue details manually.
+            </p>
+            <a href="create.html" class="btn btn-primary w-full" style="justify-content:center">
+              + Add Bounty
+            </a>
           </div>
 
           <div class="sidebar-card">
