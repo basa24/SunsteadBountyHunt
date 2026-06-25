@@ -3,6 +3,7 @@ import { verifyAward, truncateHex } from './signer.js';
 import { isLoggedIn, getSession } from './auth.js';
 import { startSubmission, canTrackPR, reconcileSubmissions } from './pulls.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
+import { isLiveBounty } from './ranking.js';
 import { renderNavChip } from './navchip.js';
 import { coinBurstOnce } from './juice.js';
 
@@ -65,6 +66,23 @@ function renderBounty(bounty) {
   const aw = Math.max(0, Math.min(1, Number(bounty.repo?.authorityWeight) || 0));
   const repoUrl = `https://tangled.org/${bounty.repo?.handle}/${bounty.repo?.name}`;
 
+  // Only link to tangled when we have a real, resolvable repo (live bounty with
+  // a resolved owner handle + repo name). Otherwise the link 404s — demo/mock
+  // bounties and any whose repo name fell back to "repo" → show a plain chip.
+  const linkOk = isLiveBounty(bounty)
+    && bounty.repo?.handle && bounty.repo.handle !== 'unknown' && !String(bounty.repo.handle).startsWith('did:')
+    && bounty.repo?.name && bounty.repo.name !== 'repo';
+  const repoChipInner = `
+    <img class="avatar avatar-sm" src="${avatar(bounty.repo?.handle)}" alt="" />
+    <span class="repo-chip-name">${escHtml(bounty.repo?.handle || '?')}/${escHtml(bounty.repo?.name || '?')}</span>
+    <span class="text-muted text-xs">⭐ ${bounty.repo?.stars ?? '–'} · ${escHtml(bounty.repo?.language || '—')}</span>`;
+  const repoChip = linkOk
+    ? `<a class="repo-chip" href="${escHtml(repoUrl)}" target="_blank" rel="noopener">${repoChipInner}</a>`
+    : `<div class="repo-chip">${repoChipInner}</div>`;
+  const viewIssue = linkOk
+    ? `<a class="btn btn-ghost btn-sm detail-view" href="${escHtml(bounty.issueUrl)}" target="_blank" rel="noopener">View issue ↗</a>`
+    : '';
+
   document.getElementById('bounty-content').innerHTML = `
     <article class="detail rise-in" style="--diff-color:var(--diff-${bounty.difficulty})">
       <div class="detail-top">
@@ -82,12 +100,8 @@ function renderBounty(bounty) {
 
       <div class="detail-reward">
         <span class="points-badge lg" style="font-size:1.2rem" title="${pts} Gold Knots">+${pts} Gold Knots</span>
-        <a class="repo-chip" href="${escHtml(repoUrl)}" target="_blank" rel="noopener">
-          <img class="avatar avatar-sm" src="${avatar(bounty.repo?.handle)}" alt="" />
-          <span class="repo-chip-name">${escHtml(bounty.repo?.handle || '?')}/${escHtml(bounty.repo?.name || '?')}</span>
-          <span class="text-muted text-xs">⭐ ${bounty.repo?.stars ?? '–'} · ${escHtml(bounty.repo?.language || '—')}</span>
-        </a>
-        <a class="btn btn-ghost btn-sm detail-view" href="${escHtml(bounty.issueUrl || '#')}" target="_blank" rel="noopener">View issue ↗</a>
+        ${repoChip}
+        ${viewIssue}
       </div>
 
       <div class="card mb-4">
@@ -172,7 +186,10 @@ function renderPRSection(bounty) {
             ${award ? `<span class="points-badge lg gk-pop" style="font-size:1.125rem">Paid +${award.points} Gold Knots</span>` : ''}
             <span class="text-xs text-muted">Bounty collected — the owner merged your pull request on tangled.</span>
           </div>
-          <a href="profile.html" class="btn btn-primary mt-2">View your hunter profile →</a>
+          <div class="flex items-center gap-2 mt-2">
+            ${/^https?:\/\//.test(sub.prUri || '') ? `<a href="${escHtml(sub.prUri)}" target="_blank" rel="noopener" class="btn btn-ghost">View merged PR ↗</a>` : ''}
+            <a href="profile.html" class="btn btn-primary">View your hunter profile →</a>
+          </div>
         </div>
       `;
       coinBurstOnce(section.querySelector('.success-panel'), bounty.id);

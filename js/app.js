@@ -371,11 +371,29 @@ function renderLeaderboard() {
   `;
 }
 
+// Navigate to a profile from a pasted handle or profile/tangled URL.
+function wireProfileSearch() {
+  const input = document.getElementById('profile-search-input');
+  const btn = document.getElementById('profile-search-btn');
+  if (!input) return;
+  const go = () => {
+    let h = (input.value || '').trim();
+    if (!h) return;
+    const m = h.match(/[?&]handle=([^&]+)/) || h.match(/tangled\.org\/([^/?#\s]+)/);
+    if (m) h = decodeURIComponent(m[1]);
+    h = h.replace(/^@/, '').trim();
+    if (h) location.href = `profile.html?handle=${encodeURIComponent(h)}`;
+  };
+  btn?.addEventListener('click', go);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+}
+
 async function init() {
   initStartScreen();
   initCardSpotlight();
   renderUserBanner();
   renderLeaderboard();
+  wireProfileSearch();
   wireFilterControls();
 
   // Show skeletons while loading

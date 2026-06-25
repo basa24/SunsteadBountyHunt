@@ -128,6 +128,10 @@ function renderAwardCard(award, idx) {
   const verifiedHtml = award.verified
     ? `<span class="verified-badge">✓ Signed</span>`
     : `<span class="unverified-badge">– Unverified</span>`;
+  // The merged PR that earned this award (token-flow awards store a real URL).
+  const prHtml = /^https?:\/\//.test(award.pullRequestUri || '')
+    ? `<a class="btn btn-ghost btn-sm" href="${escHtml(award.pullRequestUri)}" target="_blank" rel="noopener" title="The merged pull request">View PR ↗</a>`
+    : '';
 
   return `
     <div class="award-card" id="award-${idx}">
@@ -152,6 +156,7 @@ function renderAwardCard(award, idx) {
       <div class="flex items-center justify-between flex-wrap gap-2">
         <div class="bounty-tags">${kwHtml}</div>
         <div class="flex items-center gap-2">
+          ${prHtml}
           ${verifiedHtml}
           <button class="btn btn-ghost btn-sm" data-verify-idx="${idx}">Verify ↗</button>
         </div>
