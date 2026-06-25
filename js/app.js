@@ -1,3 +1,4 @@
+import './brand.js';
 import { getBounties, getUserHandle, getUserProfile, setUserHandle, setUserProfile, clearUserHandle, addBounty, removeBountyByUri, addDiscoveredOwners, getLeaderboard } from './storage.js';
 import { fetchLiveBounties, fetchUserProfile, fetchUserBounties } from './fetcher.js';
 import { login, logout, isLoggedIn, getSession } from './auth.js';

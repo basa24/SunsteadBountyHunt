@@ -136,10 +136,10 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
   font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: 0.07em;
+  font-size: 1.25rem;
+  letter-spacing: 0.05em;
   line-height: 1;
   color: var(--text-primary);
   text-decoration: none;
@@ -147,6 +147,14 @@ button { font-family: inherit; cursor: pointer; }
   padding: 0.2rem 0.5rem;
   text-transform: uppercase;
   transition: transform 0.25s var(--ease-spring);
+}
+
+/* Brand wordmark in the header — slightly richer than plain white */
+.nav-logo .km {
+  background: linear-gradient(180deg, #ffffff 0%, #cdd7e1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .logo-main {
@@ -160,7 +168,7 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.56rem;
+  font-size: 0.6rem;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -195,6 +203,76 @@ button { font-family: inherit; cursor: pointer; }
   border: none;
   padding: 0;
   align-self: flex-start;
+}
+
+/* ── Knotch wordmark: a woven knot stands in for the "ot" ── */
+.knotch-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  font-weight: 800;
+}
+.knotch-mark .km { letter-spacing: -0.01em; }
+.knot-glyph {
+  height: 0.82em;
+  width: auto;
+  flex: none;
+  margin: 0 0.05em;
+  overflow: visible; /* arrow flies outside the box when nocked back — must not clip */
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.45s var(--ease-spring), filter 0.45s var(--ease-out);
+}
+/* nav lockup: target a touch larger than cap-height, pops on hover */
+.logo-main .knot-glyph { height: 0.98em; }
+.nav-logo:hover .knot-glyph { transform: scale(1.08); }
+.footer-brand .knotch-mark { font-size: 1.05em; }
+
+/* ── The shot: arrow nocks back on hover, fires into the bull on release ── */
+.knot-arrow {
+  transform: translate(0, 0);          /* resting → stuck dead-center in the gold */
+  /* applies when returning to rest = hover-end: fast launch that overshoots and sticks */
+  transition: transform 0.4s cubic-bezier(0.2, 1.6, 0.32, 1);
+  will-change: transform;
+}
+/* drawn back up its own flight path (up-right), away from the target */
+.start-title:hover .knot-arrow,
+.nav-logo:hover  .knot-arrow {
+  transform: translate(34px, -34px);
+  /* applies while entering hover: slower, decelerating pull-back (nocking the bow) */
+  transition: transform 0.5s cubic-bezier(0.33, 0, 0.2, 1);
+}
+/* Idle float — the lockup gently bobs at rest (hero showcase) */
+.start-title .knotch-mark { animation: knotFloat 3.8s ease-in-out infinite; }
+@keyframes knotFloat {
+  0%, 100% { transform: translateY(0);    }
+  50%      { transform: translateY(-3px); }
+}
+
+/* Impact — the board shudders the instant the arrow lands. brand.js adds
+   `.shot` on hover-end; the delay syncs the shake to the arrow's arrival.
+   The second selector outranks the hero's breathe animation so it can take
+   over for the duration of the hit. */
+.knot-glyph.shot,
+.start-title .knot-glyph.shot { animation: boardImpact 0.26s ease-out 0.07s both; }
+@keyframes boardImpact {
+  0%   { transform: translate(0, 0)           scale(1);     }
+  25%  { transform: translate(0.7px, 0.5px)   scale(0.985); }
+  50%  { transform: translate(-0.5px, -0.3px) scale(1.012); }
+  75%  { transform: translate(0.3px, 0.2px)   scale(1);     }
+  100% { transform: translate(0, 0)           scale(1);     }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knot-arrow,
+  .start-title:hover .knot-arrow,
+  .nav-logo:hover .knot-arrow { transition: none; transform: translate(0, 0); }
+  .start-title .knotch-mark,
+  .start-title .knot-glyph,
+  .knot-glyph.shot,
+  .start-title .knot-glyph.shot { animation: none; }
 }
 
 .nav-links {
@@ -1418,11 +1496,11 @@ button { font-family: inherit; cursor: pointer; }
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .rise-in { animation: riseIn 0.4s var(--ease-out) both; }
 
-/* ── Concept hero (what is Bounty Hunt?) ── */
+/* ── Concept hero (what is Knotch?) ── */
 .concept-hero {
   text-align: center;
-  padding: 2.25rem 1rem 1.75rem;
-  margin-bottom: 1.5rem;
+  padding: 2.25rem 1rem 2.25rem;
+  margin-bottom: 2.75rem;
   position: relative;
 }
 
@@ -1448,6 +1526,14 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 1rem;
   line-height: 1.6;
 }
+
+/* Minimal one-line "what is this" blurb under the hero heading */
+.concept-sub {
+  max-width: 560px;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+.concept-sub .kw.top { font-size: inherit; }
 
 .concept-steps {
   display: inline-flex;
@@ -1711,15 +1797,34 @@ body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
   animation: startBob 3.4s ease-in-out infinite;
 }
 .start-title {
-  font-size: clamp(2.2rem, 7vw, 3.4rem);
+  font-size: clamp(2.9rem, 9vw, 4.4rem);
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.015em;
   text-transform: uppercase;
   margin: 0;
   line-height: 1;
 }
-.start-by { font-size: 0.72rem; }
+.start-title .km {
+  background: linear-gradient(180deg, #ffffff 0%, #cdd7e1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 26px rgba(94, 234, 212, 0.18));
+}
+.start-title .knot-glyph {
+  height: 0.92em;
+  filter: drop-shadow(0 0 18px var(--gold-glow)); /* steady — animating blur radius stutters */
+  animation: knotBreathe 5.5s ease-in-out infinite;
+}
+@keyframes knotBreathe {
+  0%, 100% { transform: scale(1);     }
+  50%      { transform: scale(1.025); }
+}
+.start-by { font-size: 0.72rem; margin-top: 0.15rem; }
 .start-by .tangled-wordmark { height: 18px; }
+/* intro "by tangled" is a real link out to tangled.org */
+a.start-by { text-decoration: none; cursor: pointer; transition: color 0.2s var(--ease-out); }
+a.start-by:hover { color: var(--teal); }
 
 .start-tag {
   color: var(--text-secondary);
@@ -1897,8 +2002,27 @@ body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
   flex-wrap: wrap;
   margin-bottom: 1rem;
 }
-.detail-meta { display: flex; align-items: center; gap: 0.6rem; }
+.detail-meta { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .detail-top .diff-badge { gap: 0.4rem; }
+
+/* Fake "active hunters" presence — small, muted, with a live green dot */
+.hunters-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.hunters-live .hunters-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--bounty-green);
+  box-shadow: 0 0 7px var(--bounty-green);
+  animation: breathe 1.8s ease-in-out infinite;
+}
+#hunters-count { color: var(--bounty-green); font-weight: 700; }
+.hunters-live.bump #hunters-count { animation: goldPop 0.4s var(--ease-spring); }
 
 .detail-title {
   font-size: 1.65rem;

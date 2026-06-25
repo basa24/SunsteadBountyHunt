@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="theme-color" content="#0d1117" />
-  <title>Bounty Hunt — Open source bounties from tangled.org</title>
+  <title>Knotch — Open source bounties from tangled.org</title>
   <link rel="stylesheet" href="css/style.css" />
   <!-- Skip the intro gate when arriving from an internal page (Back to Feed / logo). -->
   <script>try { if (sessionStorage.getItem('bh_from_app')) { document.documentElement.classList.add('skip-start'); sessionStorage.removeItem('bh_from_app'); } } catch (e) {}</script>
@@ -15,9 +15,10 @@
   <!-- Start screen: the welcoming gate before the app is revealed -->
   <div id="start-screen" class="start-screen">
     <div class="start-inner">
-      <span class="start-icon">🎯</span>
-      <h1 class="start-title">Bounty Hunt</h1>
-      <span class="logo-by start-by">by
+      <h1 class="start-title">
+        <span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g class="knot-arrow" stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span>
+      </h1>
+      <a class="logo-by start-by" href="https://tangled.org" target="_blank" rel="noopener" title="Open tangled.org ↗">by
         <svg class="tangled-wordmark" viewBox="0 0 118 31" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tangled">
           <path fill-rule="evenodd" clip-rule="evenodd" d="M78.6118 9.75728C79.2832 9.75733 79.8454 9.87208 80.2983 10.101C80.7513 10.3249 81.1161 10.6064 81.3921 10.9448C81.6732 11.278 81.8895 11.6064 82.0405 11.9292H82.1655V9.91353H85.4702V22.0307C85.4702 23.0305 85.2201 23.8668 84.7202 24.5385C84.2203 25.2154 83.5273 25.7251 82.6421 26.0688C81.762 26.4125 80.7488 26.5844 79.603 26.5844C78.5252 26.5844 77.6012 26.4385 76.8306 26.1469C76.065 25.8553 75.4555 25.462 75.0024 24.9672C74.5495 24.4726 74.2551 23.9237 74.1196 23.3198L77.1978 22.9057C77.2915 23.1243 77.4401 23.3303 77.6431 23.5229C77.8461 23.7206 78.1147 23.8824 78.4478 24.0073C78.7861 24.1321 79.1973 24.1947 79.6812 24.1948C80.4049 24.1948 81.0016 24.0227 81.4702 23.6792C81.9441 23.3355 82.1811 22.7701 82.1812 21.9838V19.7885H82.0405C81.8947 20.1217 81.6758 20.4371 81.3843 20.7338C81.0927 21.0306 80.7174 21.273 80.2593 21.4604C79.8012 21.6477 79.2546 21.7416 78.6196 21.7417C77.7188 21.7417 76.8981 21.5332 76.1587 21.1167C75.4244 20.6948 74.8383 20.0514 74.4009 19.187C73.9686 18.3172 73.7524 17.2181 73.7524 15.8901C73.7524 14.5308 73.9738 13.3952 74.4165 12.4838C74.8592 11.5726 75.4479 10.89 76.1821 10.437C76.9216 9.98403 77.7318 9.75728 78.6118 9.75728ZM79.6733 12.4057C79.1269 12.4058 78.6663 12.5544 78.2915 12.851C77.9166 13.1426 77.6326 13.5491 77.4399 14.0698C77.2472 14.5906 77.1509 15.1922 77.1509 15.8745C77.1509 16.5671 77.2472 17.1662 77.4399 17.6713C77.6378 18.1712 77.9218 18.5594 78.2915 18.8354C78.6663 19.106 79.1269 19.2416 79.6733 19.2417C80.2096 19.2417 80.663 19.1087 81.0327 18.8432C81.4076 18.5724 81.6942 18.1868 81.8921 17.687C82.0952 17.1818 82.1968 16.5776 82.1968 15.8745C82.1968 15.1714 82.0978 14.5619 81.8999 14.0463C81.702 13.5256 81.4155 13.1218 81.0405 12.8354C80.6656 12.5491 80.2096 12.4057 79.6733 12.4057Z"/>
           <path fill-rule="evenodd" clip-rule="evenodd" d="M98.7397 9.75728C99.531 9.75733 100.268 9.88506 100.95 10.1401C101.637 10.39 102.236 10.7679 102.747 11.2729C103.262 11.778 103.663 12.4137 103.95 13.1792C104.236 13.9395 104.379 14.8303 104.379 15.851V16.7651H96.2085V16.7729C96.2085 17.3666 96.3179 17.8797 96.5366 18.312C96.7606 18.7441 97.0758 19.0776 97.4819 19.312C97.888 19.5461 98.3694 19.6635 98.9263 19.6635C99.2959 19.6635 99.6347 19.6113 99.9419 19.5073C100.249 19.4032 100.512 19.2467 100.731 19.0385C100.95 18.8303 101.116 18.5749 101.231 18.2729L104.309 18.476C104.153 19.2155 103.832 19.8615 103.348 20.4135C102.869 20.9603 102.249 21.3876 101.489 21.6948C100.734 21.9967 99.8609 22.1479 98.8716 22.1479C97.6376 22.1478 96.5754 21.8977 95.6851 21.3979C94.7998 20.8928 94.1173 20.179 93.6382 19.2573C93.159 18.3302 92.9194 17.2338 92.9194 15.9682C92.9194 14.7339 93.159 13.6505 93.6382 12.7182C94.1173 11.7861 94.792 11.0593 95.6616 10.5385C96.5365 10.0179 97.5629 9.75728 98.7397 9.75728ZM98.7935 12.2417C98.2886 12.2417 97.8411 12.3591 97.4507 12.5932C97.0654 12.8223 96.7632 13.1324 96.5444 13.5229C96.3427 13.8784 96.2325 14.2718 96.2124 14.7026H101.247C101.247 14.2235 101.142 13.7989 100.934 13.4292C100.726 13.0595 100.437 12.7702 100.067 12.562C99.7024 12.3486 99.2776 12.2417 98.7935 12.2417Z"/>
@@ -28,7 +29,7 @@
           <path d="M68.1138 9.75728C68.947 9.75728 69.6737 9.93962 70.2935 10.3042C70.9132 10.6687 71.395 11.1897 71.7388 11.8667C72.0825 12.5385 72.2544 13.3407 72.2544 14.2729V21.9135H68.9263V14.8667C68.9315 14.1324 68.744 13.5593 68.3638 13.1479C67.9836 12.7313 67.46 12.5229 66.7935 12.5229C66.3456 12.5229 65.9497 12.6193 65.606 12.812C65.2675 13.0047 65.0018 13.286 64.8091 13.6557C64.6216 14.0203 64.5252 14.4605 64.52 14.976V21.9135H61.1919V9.91353H64.3638V12.0307H64.5044C64.77 11.3329 65.2154 10.7807 65.8403 10.3745C66.4653 9.96305 67.2232 9.75728 68.1138 9.75728Z"/>
           <path d="M21.0971 30.866C20.0566 30.8575 19.2628 30.5542 18.4016 30.0269C17.1668 29.3753 16.2237 28.2808 15.5497 27.0739C14.4789 28.4065 13.0476 29.215 11.4453 29.6718C10.763 29.8705 9.56809 30.0721 7.58737 29.3523C4.73277 28.3905 2.65342 25.4114 2.88973 22.3758C2.8465 21.1175 3.30391 19.8825 3.95227 18.8208C2.22264 17.8897 0.812251 16.3266 0.272149 14.4098C-0.0560728 13.3604 -0.0422712 12.2299 0.0787624 11.1512C0.512215 8.60429 2.41696 6.38956 4.86912 5.59294C5.8479 3.35574 7.98378 1.68743 10.4037 1.34778C12.0104 1.12338 13.6735 1.46075 15.0792 2.27979C17.1272 0.00158572 20.6952 -0.671697 23.4195 0.727793C25.4978 1.72322 26.9839 3.80003 27.3447 6.06471C29.3222 6.85928 30.9877 8.47971 31.6413 10.5368C32.0784 11.8104 32.0929 13.2132 31.8098 14.5209C31.3041 16.5615 29.8679 18.2987 28.009 19.2482C28.0135 19.6113 29.2037 22.2296 29.0047 24.2056C28.9612 26.676 27.399 29.0172 25.2325 30.1544C23.9683 30.8945 22.4702 30.8805 21.0971 30.866ZM15.1733 23.755C16.9256 23.5593 18.0743 22.0269 18.9665 20.6469C19.3883 20.0182 19.7105 19.3146 20.0306 18.6454C20.4458 19.027 20.7975 19.7461 21.4541 19.9173C22.1457 20.1333 22.9566 19.9579 23.38 19.3277C24.1902 17.8118 23.7908 15.9827 23.319 14.4119C23.0284 13.5097 22.6472 12.5841 21.9218 11.9446C22.0765 10.85 21.4299 9.73834 20.5106 9.16542C19.7272 9.79198 18.5352 9.78821 17.7794 9.11795C16.3309 10.5997 15.0034 10.5505 13.7212 9.37618C13.4331 9.11226 12.8832 10.9871 10.9535 9.92506C9.84488 10.8567 8.98526 11.753 8.22356 13.0435C7.48342 14.4347 6.70829 15.6703 6.64151 17.1811C6.6094 18.0641 7.29731 18.9892 8.22942 18.9174C9.16105 19.0009 9.7952 18.0813 10.5006 17.6993C10.6058 18.9316 10.7243 20.2556 11.1395 21.4587C11.6161 23.0155 13.2947 24.005 14.8835 23.7784C14.9959 23.7696 15.1733 23.755 15.1733 23.755ZM16.0828 19.1062C15.2306 18.5823 15.6407 17.4452 15.6066 16.6193C15.6914 15.6227 15.7594 14.575 16.2061 13.667C16.6788 13.0197 17.8318 13.2694 17.8827 14.0999C17.8488 14.9353 17.4664 15.767 17.5121 16.633C17.4129 17.3561 17.5839 18.1684 17.265 18.8293C17.0033 19.195 16.4703 19.3013 16.0828 19.1062ZM12.3606 18.6302C11.5578 18.1933 11.8129 17.0941 11.687 16.3298C11.7914 15.445 11.7045 14.3226 12.4431 13.7021C13.1653 13.1969 14.1485 14.0621 13.8069 14.8564C13.4426 15.8602 13.6814 16.957 13.6891 17.9748C13.5512 18.5752 12.911 18.894 12.3606 18.6302Z"/>
         </svg>
-      </span>
+      </a>
       <p class="start-tag">Hunt open-source <span class="kw top">#bounty</span> issues from tangled.org — ship a PR, and earn <strong class="text-gold">Gold Knots 🪙</strong> when it merges.</p>
       <button class="btn btn-gold btn-lg start-btn" id="start-btn">Start The Hunt →</button>
       <div class="concept-steps start-steps">
@@ -52,9 +53,7 @@
       </div>
       <a href="index.html" class="nav-center nav-logo">
         <span class="logo-main">
-          <span class="logo-icon">🎯</span>
-          Bounty Hunt
-          <span class="logo-badge">alpha</span>
+          <span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g class="knot-arrow" stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span>
         </span>
         <span class="logo-by">by
           <svg class="tangled-wordmark" viewBox="0 0 118 31" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tangled">
@@ -81,6 +80,7 @@
       <!-- Concept hero -->
       <header class="concept-hero">
         <h1>Hunt with PRs. <span class="accent">Earn Gold Knots 🪙</span></h1>
+        <p class="concept-sub">Knotch turns <span class="kw top">#bounty</span> issues on tangled.org into an open race — claim one with a PR, win the merge, and earn Gold Knots that build a portable, cryptographically signed track record.</p>
         <div class="concept-steps">
           <span class="step">🏷️ Owner tags #bounty</span>
           <span class="arrow">→</span>
@@ -169,7 +169,7 @@
           <div class="sidebar-card">
             <div class="sidebar-title">About</div>
             <p style="font-size:0.8125rem;color:var(--text-secondary)">
-              Bounty Hunt reads live issues from
+              Knotch reads live issues from
               <a href="https://tangled.org" target="_blank" rel="noopener">tangled.org</a>
               via AT Protocol XRPC. Awards are cryptographically signed and
               portable across the AT Protocol network.
@@ -183,7 +183,7 @@
 
   <footer class="footer">
     <div class="container footer-inner">
-      <span class="footer-brand">🎯 Bounty Hunt</span>
+      <span class="footer-brand"><span class="knotch-mark" role="img" aria-label="Knotch"><span class="km">Kn</span><svg class="knot-glyph" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="32" cy="32" r="25" stroke="var(--teal)" stroke-width="6"/><circle cx="32" cy="32" r="8.5" fill="var(--gold)"/><g class="knot-arrow" stroke="var(--gold-bright)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M60 4 34 30"/><path d="M34 30 45 30M34 30 34 19"/></g></svg><span class="km">tch</span></span></span>
       <span class="footer-tag">Hunt open-source bounties · earn Gold Knots 🪙</span>
       <nav class="footer-links">
         <a href="https://tangled.org" target="_blank" rel="noopener">tangled.org ↗</a>

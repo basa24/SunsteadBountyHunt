@@ -1,3 +1,4 @@
+import './brand.js';
 import { getUserProfile, getUserHandle, updateUserProfile, addBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { fetchUserProfile, fetchUserBounties, verifyBountyRecord } from './fetcher.js';
@@ -301,7 +302,7 @@ function initCollapsibles() {
 // ── Init ──────────────────────────────────────────────────────────────────
 
 function renderProfile(profile, { self }) {
-  document.title = `@${profile.handle} — Bounty Hunt Profile`;
+  document.title = `@${profile.handle} — Knotch Profile`;
   renderHeader(profile, { self });
   renderStats(profile);
   renderSkillBars(profile);

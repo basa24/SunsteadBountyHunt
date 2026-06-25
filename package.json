@@ -1,7 +1,7 @@
 {
-  "name": "bounty-hunt",
+  "name": "knotch",
   "version": "0.1.0",
-  "description": "Tangled Bounty Hunt — reputation-driven contribution incentive system for tangled.org",
+  "description": "Knotch — reputation-driven contribution incentive system for tangled.org",
   "type": "module",
   "scripts": {
     "dev": "vite",
