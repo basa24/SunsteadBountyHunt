@@ -288,11 +288,16 @@ export async function getRepoNamesForDid(did) {
 
 // ── Fetch bounties from a single tangled.org repo ─────────────────────────
 
+// How long a scanned owner stays "fresh" before we re-read their issues. Kept
+// short so newly-declared bounties from followed/network accounts surface fast
+// (the live-refresh poll in app.js re-scans on this cadence). Dial up to reduce
+// network chatter; dial down for a snappier demo.
+export const OWNER_SCAN_TTL_MS = 15_000;
+
 // Scan one owner for all their OPEN #bounty issues (across every repo they own).
-// Cached per owner with the 5-min TTL so repeated cycles are cheap.
 async function fetchBountiesFromOwner(handle) {
   const cacheKey = `owner:${handle}`;
-  if (isCacheFresh(cacheKey)) return [];
+  if (isCacheFresh(cacheKey, OWNER_SCAN_TTL_MS)) return [];
 
   const did = await resolveHandle(handle);
   const pds = await getPdsEndpoint(did);
@@ -357,7 +362,7 @@ export async function fetchLiveBounties(onProgress) {
   //    spend the network budget on owners we haven't scanned recently
   //    (newest discoveries first — addDiscoveredOwners prepends).
   const owners = getDiscoveredOwners();
-  const stale = owners.filter(h => !isCacheFresh(`owner:${h}`)).slice(0, SCAN_BUDGET);
+  const stale = owners.filter(h => !isCacheFresh(`owner:${h}`, OWNER_SCAN_TTL_MS)).slice(0, SCAN_BUDGET);
 
   const allLive = [];
   await Promise.all(stale.map(async (handle) => {

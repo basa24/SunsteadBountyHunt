@@ -137,6 +137,24 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Intro gate: the "Start The Hunt" screen, shown on every load. Clicking it
+// lifts the curtain (slide up + blur) while the app rises into view beneath.
+function initStartScreen() {
+  const el = document.getElementById('start-screen');
+  if (!el) return;
+  if (document.documentElement.classList.contains('skip-start')) { el.remove(); return; }
+  document.body.classList.add('gated');
+  document.getElementById('start-btn')?.addEventListener('click', () => {
+    document.body.classList.remove('gated');
+    document.body.classList.add('hunt-entering');
+    el.classList.add('dismissed');
+    setTimeout(() => {
+      el.remove();
+      document.body.classList.remove('hunt-entering');
+    }, 900);
+  });
+}
+
 // Compact live-status pill in the top-left nav. state ∈ loading | live | warn
 function setLive(state, label) {
   const el = document.getElementById('live-notice');
@@ -300,6 +318,8 @@ function wireFilterControls() {
 
 // ── Network leaderboard (sidebar) ───────────────────────────────────────────
 
+let _lbSig = '';
+
 function renderLeaderboard() {
   const list = document.getElementById('leaderboard-list');
   if (!list) return;
@@ -320,24 +340,31 @@ function renderLeaderboard() {
   }
 
   if (!rows.length) {
-    list.innerHTML = `<p style="font-size:0.8125rem;color:var(--text-muted)">No hunters discovered yet.</p>`;
+    list.innerHTML = `<p class="lb-empty">No hunters discovered yet.</p>`;
+    _lbSig = '';
     return;
   }
 
   rows.sort((a, b) => b.gk - a.gk || b.count - a.count || a.handle.localeCompare(b.handle));
+  const top = rows.slice(0, 15);
+
+  // This fires on every owner scan — only re-render (and replay the juice) when
+  // the standings actually change.
+  const sig = top.map(r => `${r.handle}:${r.gk}:${r.count}:${r.you ? 1 : 0}`).join('|');
+  if (sig === _lbSig) return;
+  _lbSig = sig;
 
   list.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:0.4rem">
-      ${rows.slice(0, 15).map((r, i) => `
-        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem${r.you ? ';font-weight:700' : ''}">
-          <span style="width:1.25rem;text-align:right;color:var(--text-muted)">${i + 1}</span>
-          <img class="avatar avatar-sm" src="${avatar(r.handle)}" alt="" />
-          <a href="https://tangled.org/${encodeURIComponent(r.handle)}" target="_blank" rel="noopener"
-             style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+    <div class="lb-list">
+      ${top.map((r, i) => `
+        <div class="lb-row${r.you ? ' lb-you' : ''}${i < 3 ? ` lb-top lb-top-${i + 1}` : ''}" style="--lb-i:${i}">
+          <span class="lb-rank">${i + 1}</span>
+          <img class="avatar avatar-sm lb-avatar" src="${avatar(r.handle)}" alt="" />
+          <a class="lb-name" href="https://tangled.org/${encodeURIComponent(r.handle)}" target="_blank" rel="noopener"
              title="${escHtml(r.handle)}${r.count ? ` · ${r.count} won` : ''}">
             ${escHtml(r.handle)}${r.you ? ' <span class="text-muted">(you)</span>' : ''}
           </a>
-          <span class="points-badge" title="${r.count} bounties won">🪙 ${r.gk}</span>
+          <span class="lb-gk" title="${r.count} bounties won"><span class="lb-coin"></span>${r.gk}</span>
         </div>
       `).join('')}
     </div>
@@ -345,6 +372,7 @@ function renderLeaderboard() {
 }
 
 async function init() {
+  initStartScreen();
   initCardSpotlight();
   renderUserBanner();
   renderLeaderboard();
@@ -406,10 +434,37 @@ async function init() {
   // (covers relay-indexed repos network-wide).
   startFirehose();
 
+  // Re-scan discovered/followed owners on a short cadence so their newly-declared
+  // #bounty issues surface quickly (tangled-hosted accounts aren't on the relay,
+  // so the firehose can't see them — this poll is their path).
+  startLiveRefresh();
+
   // For the logged-in user (likely on a tangled-hosted PDS the relay can't
   // see), poll their own issues so a bounty they just created shows up without
   // a manual refresh.
   if (isLoggedIn()) startUserBountyPolling();
+}
+
+// How often to re-scan the network for new follower/owner bounties. Pairs with
+// OWNER_SCAN_TTL_MS in fetcher.js (which must be ≤ this for a re-scan to refetch).
+const LIVE_REFRESH_MS = 15_000;
+let _liveTimer = null;
+let _liveRunning = false;
+
+function startLiveRefresh() {
+  if (_liveTimer) return;
+  _liveTimer = setInterval(async () => {
+    if (_liveRunning) return; // don't overlap scans
+    _liveRunning = true;
+    try {
+      await fetchLiveBounties(({ count, error }) => {
+        if (!error && count > 0) applyFilters();
+        renderLeaderboard();
+      });
+    } catch { /* transient — try again next tick */ }
+    finally { _liveRunning = false; }
+  }, LIVE_REFRESH_MS);
+  window.addEventListener('beforeunload', () => clearInterval(_liveTimer));
 }
 
 let _pollTimer = null;

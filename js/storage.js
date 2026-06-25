@@ -276,9 +276,9 @@ export function setFetchMeta(repoKey) {
   writeJSON(KEYS.CACHE_META, meta);
 }
 
-export function isCacheFresh(repoKey) {
+export function isCacheFresh(repoKey, ttlMs = CACHE_TTL_MS) {
   const m = getFetchMeta(repoKey);
-  return m && (Date.now() - m.fetchedAt) < CACHE_TTL_MS;
+  return m && (Date.now() - m.fetchedAt) < ttlMs;
 }
 
 // ── Reset (for dev/testing) ───────────────────────────────────────────────

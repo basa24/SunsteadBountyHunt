@@ -8,6 +8,20 @@ import { getUserHandle, getUserProfile, clearUserHandle } from './storage.js';
 import { logout } from './auth.js';
 import { runCountUps } from './juice.js';
 
+// On a sub-page (bounty/profile), flag any navigation back to the feed (Back to
+// Feed links, the logo) so index.html can skip its intro "Start The Hunt" gate —
+// the gate should only appear on a fresh load/refresh, not internal navigation.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (!a) return;
+  try {
+    const p = new URL(a.getAttribute('href'), location.href).pathname.replace(/\/+$/, '');
+    if (p === '' || p.endsWith('index.html')) {
+      sessionStorage.setItem('bh_from_app', '1');
+    }
+  } catch { /* ignore malformed hrefs */ }
+}, true);
+
 function avatar(handle) {
   return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(handle || 'anon')}&size=24`;
 }

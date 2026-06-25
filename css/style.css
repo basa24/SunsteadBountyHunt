@@ -1657,6 +1657,171 @@ button { font-family: inherit; cursor: pointer; }
 }
 .success-panel { position: relative; }
 
+/* ── Start screen (intro gate) ── */
+body.gated { overflow: hidden; }
+.skip-start .start-screen { display: none; } /* arrived from an internal page */
+
+.start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  background:
+    radial-gradient(1000px 600px at 50% 28%, rgba(45, 212, 191, 0.10), transparent 70%),
+    radial-gradient(800px 520px at 50% 105%, rgba(240, 180, 41, 0.07), transparent 60%),
+    var(--bg-primary);
+  transition: opacity 0.6s ease, transform 0.85s var(--ease-out), filter 0.6s ease;
+}
+/* Curtain lifts up and blurs out, revealing the app beneath */
+.start-screen.dismissed {
+  opacity: 0;
+  transform: translateY(-100%);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+/* App rises + fades into view as the curtain lifts */
+@keyframes huntEnter {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes huntFade { from { opacity: 0; } to { opacity: 1; } }
+body.hunt-entering .main-content { animation: huntEnter 0.8s 0.12s var(--ease-out) both; }
+body.hunt-entering .nav,
+body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
+
+.start-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.15rem;
+  max-width: 640px;
+  animation: startIn 0.7s var(--ease-out) both;
+}
+
+.start-icon {
+  font-size: 3rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 20px var(--gold-glow));
+  animation: startBob 3.4s ease-in-out infinite;
+}
+.start-title {
+  font-size: clamp(2.2rem, 7vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1;
+}
+.start-by { font-size: 0.72rem; }
+.start-by .tangled-wordmark { height: 18px; }
+
+.start-tag {
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  max-width: 520px;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.start-btn {
+  font-size: 1.05rem;
+  padding: 0.85rem 2.1rem;
+  animation: startPulse 2.6s ease-in-out infinite;
+}
+.start-steps { margin-top: 0.75rem; }
+
+@keyframes startIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes startBob { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-9px) rotate(5deg); } }
+@keyframes startPulse {
+  0%, 100% { box-shadow: 0 6px 22px var(--gold-glow); }
+  50%      { box-shadow: 0 8px 32px rgba(255, 216, 77, 0.5); }
+}
+
+/* ── Leaderboard (sidebar) ── */
+.lb-empty { font-size: 0.8125rem; color: var(--text-muted); }
+
+.lb-list { display: flex; flex-direction: column; gap: 0.1rem; }
+
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.32rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  position: relative;
+  transition: background 0.15s, transform 0.18s var(--ease-spring);
+  animation: lbIn 0.4s var(--ease-out) both;
+  animation-delay: calc(var(--lb-i, 0) * 45ms);
+}
+.lb-row:hover { background: var(--bg-accent); transform: translateX(3px); }
+
+.lb-rank {
+  width: 1.4rem;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.lb-avatar { transition: transform 0.18s var(--ease-spring); }
+.lb-row:hover .lb-avatar { transform: scale(1.12) rotate(-6deg); }
+
+.lb-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.lb-name:hover { color: var(--teal); text-decoration: none; }
+
+.lb-gk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 800;
+  color: var(--gold-bright);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.lb-coin {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  flex: none;
+  background: radial-gradient(circle at 34% 28%, #fff4cb, var(--gold-bright) 45%, var(--gold) 65%, var(--gold-deep));
+  box-shadow: 0 0 5px var(--gold-glow);
+}
+.lb-row:hover .lb-coin { animation: coinSpin 1.6s var(--ease-out) infinite; }
+
+/* Podium */
+.lb-top-1 .lb-rank { color: var(--gold-bright); animation: lbCrown 2.2s ease-in-out infinite; }
+.lb-top-2 .lb-rank { color: #cfd8e3; }
+.lb-top-3 .lb-rank { color: #d6924f; }
+.lb-top-1 { background: linear-gradient(90deg, rgba(240, 180, 41, 0.10), transparent 80%); }
+.lb-top-1 .lb-coin { box-shadow: 0 0 9px var(--gold-bright); }
+
+/* The logged-in hunter's own row */
+.lb-you { box-shadow: inset 2px 0 0 var(--teal); }
+.lb-you .lb-name { color: var(--text-primary); font-weight: 700; }
+
+@keyframes lbIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes lbCrown {
+  0%, 100% { text-shadow: 0 0 8px var(--gold-glow); }
+  50%      { text-shadow: 0 0 16px var(--gold-bright); }
+}
+
 /* ── Footer ── */
 .footer {
   border-top: 1px solid var(--border);
@@ -1746,17 +1911,23 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .detail-reward {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto; /* coin | repo (shrinks) | button */
   align-items: center;
   gap: 0.75rem;
-  flex-wrap: wrap;
   margin-bottom: 1.25rem;
+}
+.detail-reward .repo-chip { justify-self: start; }
+@media (max-width: 600px) {
+  .detail-reward { grid-template-columns: 1fr; justify-items: start; }
 }
 
 .repo-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;            /* allow the chip to shrink instead of forcing a wrap */
+  flex: 0 1 auto;
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
@@ -1770,8 +1941,16 @@ button { font-family: inherit; cursor: pointer; }
   text-decoration: none;
   transform: translateY(-1px);
 }
-.repo-chip-name { font-weight: 600; color: var(--text-primary); }
-.detail-view { margin-left: auto; }
+.repo-chip-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-chip .text-xs { flex: none; white-space: nowrap; } /* keep ⭐/lang intact; name truncates first */
+.detail-view { flex: none; white-space: nowrap; }
 
 .detail-grid {
   display: grid;
