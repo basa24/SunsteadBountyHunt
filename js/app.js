@@ -1,10 +1,11 @@
-import { getBounties, getUserHandle, getUserProfile, setUserHandle, setUserProfile, clearUserHandle, addBounty, removeBountyByUri } from './storage.js';
+import { getBounties, getUserHandle, getUserProfile, setUserHandle, setUserProfile, clearUserHandle, addBounty, removeBountyByUri, addDiscoveredOwners, getLeaderboard } from './storage.js';
 import { fetchLiveBounties, fetchUserProfile, fetchUserBounties } from './fetcher.js';
 import { login, logout, isLoggedIn, getSession } from './auth.js';
 import { connectFirehose } from './firehose.js';
 import { reconcileSubmissions } from './pulls.js';
 import { rankBounties, extractAllSkills } from './ranking.js';
 import { DIFFICULTY_LABELS } from './data.js';
+import { initCardSpotlight, runCountUps } from './juice.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ function avatar(handle) {
 
 // ── Render ────────────────────────────────────────────────────────────────
 
-function renderBountyCard(bounty) {
+function renderBountyCard(bounty, idx = 0) {
   // Combined tag list: top keywords first, then the rest. Only the first 3
   // show at rest — the others are revealed on hover via the .kw-extra class.
   const allTags = [
@@ -76,7 +77,7 @@ function renderBountyCard(bounty) {
   const diffLabelFull = `Difficulty ${bounty.difficulty} · ${diffLabel(bounty.difficulty)}`;
 
   return `
-    <div class="bounty-card-wrap" style="--diff-color:var(--diff-${bounty.difficulty}); --skull:url(${skullUri(bounty.difficulty)})">
+    <div class="bounty-card-wrap" style="--diff-color:var(--diff-${bounty.difficulty}); --skull:url(${skullUri(bounty.difficulty)}); --rank:'${idx + 1}'">
       <div class="card card-hover"
            onclick="window.location='bounty.html?id=${bounty.id}'">
       <div class="card-body bounty-card">
@@ -147,7 +148,7 @@ function setLive(state, label) {
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-let currentFilter = { skill: '', diff: '', sort: 'relevance' };
+let currentFilter = { skill: '', diff: '', sort: 'relevance', liveOnly: false };
 
 function applyFilters() {
   const bounties = getBounties();
@@ -156,12 +157,13 @@ function applyFilters() {
     filterSkill: currentFilter.skill || null,
     filterDiff:  currentFilter.diff  || null,
     sortMode:    currentFilter.sort,
+    liveOnly:    currentFilter.liveOnly,
   });
   document.getElementById('feed').innerHTML =
     ranked.length ? ranked.map(renderBountyCard).join('') : `
       <div class="empty-state">
         <div style="font-size:2rem">🎯</div>
-        <p>No bounties match your filters.</p>
+        <p>No bounties on the board match your filters.</p>
       </div>`;
 }
 
@@ -176,7 +178,7 @@ function renderUserBanner() {
     banner.classList.add('hidden');
     const gk = getUserProfile()?.bountyProfile?.totalPoints || 0;
     navUser.innerHTML = `
-      <span class="gk-balance" title="Your Gold Knots balance">🪙 ${gk}</span>
+      <span class="gk-balance" title="Your Gold Knots balance">🪙 <span class="gk-num" data-countup="${gk}">0</span></span>
       <div class="account-chip">
         <a class="account-chip-link" href="profile.html" title="View your profile">
           <img class="avatar avatar-sm" src="${avatar(handle)}" alt="" />
@@ -185,6 +187,7 @@ function renderUserBanner() {
         <button class="btn btn-ghost btn-sm" id="logout-btn" title="Log out">✕</button>
       </div>
     `;
+    runCountUps(navUser);
     document.getElementById('logout-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       logout();
@@ -268,8 +271,84 @@ function populateSkillFilter(bounties) {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
+// Wire up the filter/sort controls. Called synchronously at the very start of
+// init() — BEFORE any network awaits — so changing a dropdown during the
+// initial load takes effect immediately instead of being silently dropped.
+function wireFilterControls() {
+  document.getElementById('skill-filter')?.addEventListener('change', e => {
+    currentFilter.skill = e.target.value;
+    applyFilters();
+  });
+  document.getElementById('diff-filter')?.addEventListener('change', e => {
+    currentFilter.diff = e.target.value;
+    applyFilters();
+  });
+  document.getElementById('sort-select')?.addEventListener('change', e => {
+    currentFilter.sort = e.target.value;
+    applyFilters();
+  });
+  // "Real only" — hide demo/mock/manual bounties, show live-parsed ones.
+  const liveToggle = document.getElementById('live-filter');
+  if (liveToggle) {
+    currentFilter.liveOnly = liveToggle.checked;
+    liveToggle.addEventListener('change', e => {
+      currentFilter.liveOnly = e.target.checked;
+      applyFilters();
+    });
+  }
+}
+
+// ── Network leaderboard (sidebar) ───────────────────────────────────────────
+
+function renderLeaderboard() {
+  const list = document.getElementById('leaderboard-list');
+  if (!list) return;
+
+  const lb = getLeaderboard(); // { handle: { gk, count } }
+  const rows = Object.entries(lb).map(([handle, v]) => ({
+    handle, gk: v.gk || 0, count: v.count || 0, you: false,
+  }));
+
+  // Merge the logged-in user authoritatively from their own profile.
+  const me = isLoggedIn() ? getSession().handle : null;
+  if (me) {
+    const bp = getUserProfile()?.bountyProfile || {};
+    const mine = { gk: bp.totalPoints || 0, count: bp.totalCompleted || 0 };
+    const existing = rows.find(r => r.handle === me);
+    if (existing) { existing.gk = mine.gk; existing.count = mine.count; existing.you = true; }
+    else rows.push({ handle: me, gk: mine.gk, count: mine.count, you: true });
+  }
+
+  if (!rows.length) {
+    list.innerHTML = `<p style="font-size:0.8125rem;color:var(--text-muted)">No hunters discovered yet.</p>`;
+    return;
+  }
+
+  rows.sort((a, b) => b.gk - a.gk || b.count - a.count || a.handle.localeCompare(b.handle));
+
+  list.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0.4rem">
+      ${rows.slice(0, 15).map((r, i) => `
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem${r.you ? ';font-weight:700' : ''}">
+          <span style="width:1.25rem;text-align:right;color:var(--text-muted)">${i + 1}</span>
+          <img class="avatar avatar-sm" src="${avatar(r.handle)}" alt="" />
+          <a href="https://tangled.org/${encodeURIComponent(r.handle)}" target="_blank" rel="noopener"
+             style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+             title="${escHtml(r.handle)}${r.count ? ` · ${r.count} won` : ''}">
+            ${escHtml(r.handle)}${r.you ? ' <span class="text-muted">(you)</span>' : ''}
+          </a>
+          <span class="points-badge" title="${r.count} bounties won">🪙 ${r.gk}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function init() {
+  initCardSpotlight();
   renderUserBanner();
+  renderLeaderboard();
+  wireFilterControls();
 
   // Show skeletons while loading
   const feed = document.getElementById('feed');
@@ -285,6 +364,7 @@ async function init() {
       if (!error && count > 0) {
         applyFilters(); // refresh feed as new bounties arrive
       }
+      renderLeaderboard(); // GK tallies update as each owner is scanned
     });
     setLive('live', 'Live');
   } catch {
@@ -298,26 +378,13 @@ async function init() {
     const n = await syncUserBounties();
     if (n > 0) setLive('live', 'Live');
     // Resolve any pending PRs (e.g. merged/closed since last visit).
-    reconcileSubmissions().then(({ changed }) => { if (changed) applyFilters(); });
+    reconcileSubmissions().then(({ changed }) => { if (changed) { applyFilters(); renderLeaderboard(); } });
+    renderLeaderboard(); // reflect the user's own GK immediately
   }
 
   // Final render with fresh data
   applyFilters();
   populateSkillFilter(getBounties());
-
-  // Filters
-  document.getElementById('skill-filter')?.addEventListener('change', e => {
-    currentFilter.skill = e.target.value;
-    applyFilters();
-  });
-  document.getElementById('diff-filter')?.addEventListener('change', e => {
-    currentFilter.diff = e.target.value;
-    applyFilters();
-  });
-  document.getElementById('sort-select')?.addEventListener('change', e => {
-    currentFilter.sort = e.target.value;
-    applyFilters();
-  });
 
   // Login button (handle + app password)
   document.getElementById('connect-btn')?.addEventListener('click', () => {
@@ -395,8 +462,10 @@ function startFirehose() {
 
   _firehose = connectFirehose(
     (bounty) => {
-      // New #bounty issue seen on the network — cache it and refresh the feed.
+      // New #bounty issue seen on the network — cache it, remember its owner so
+      // we keep scanning them, and refresh the feed.
       addBounty(bounty);
+      if (bounty.repo?.handle) addDiscoveredOwners([bounty.repo.handle]);
       applyFilters();
       setLive('live', 'Live');
     },

@@ -1,6 +1,8 @@
-import { SEED_REPOS, MOCK_BOUNTIES } from './data.js';
 import { parseIssue } from './ai-parser.js';
-import { isCacheFresh, setFetchMeta, mergeLiveBounties, computeBountyProfile } from './storage.js';
+import {
+  isCacheFresh, setFetchMeta, mergeLiveBounties, computeBountyProfile,
+  getDiscoveredOwners, addDiscoveredOwners, setLeaderboardEntry,
+} from './storage.js';
 
 // tangled.org does NOT expose public XRPC (tangled.org/xrpc 404s). Tangled data lives
 // on standard AT Protocol PDSes, so we read it the normal atproto way:
@@ -218,7 +220,10 @@ export async function fetchOpenIssueUris(ownerHandle, repoName) {
     const numbers = [...new Set(
       [...listHtml.matchAll(/\/issues\/(\d+)\b/g)].map(m => m[1])
     )];
-    if (!numbers.length) return new Set(); // no open issues
+    // tangled's issue LIST page is client-rendered, so an empty number list
+    // means "couldn't determine state", NOT "zero open issues". Return null so
+    // callers keep all #bounty issues instead of filtering them all out.
+    if (!numbers.length) return null;
 
     const open = new Set();
     await Promise.all(numbers.map(async (n) => {
@@ -259,16 +264,16 @@ export async function fetchPullStatuses(ownerHandle, repoName) {
   for (const state of ['open', 'merged', 'closed']) {
     try {
       const html = await (await fetch(`${base}?state=${state}`)).text();
-      const titles = new Set(
-        [...html.matchAll(/\/pulls\/\d+"[^>]*class="dark:text-white"[^>]*>\s*([^<]+)/g)]
-          .map(m => normalizeTitle(m[1]))
-      );
+      // (PR number, normalized title) per row — lets us match a PR by an
+      // embedded token and recover its number for the award link.
+      const entries = [...html.matchAll(/\/pulls\/(\d+)"[^>]*class="dark:text-white"[^>]*>\s*([^<]+)/g)]
+        .map(m => ({ number: Number(m[1]), title: normalizeTitle(m[2]) }));
       const dids = new Set(
         [...html.matchAll(/avatar\.tangled\.sh\/[a-f0-9]+\/(did:plc:[a-z0-9]+)/g)].map(m => m[1])
       );
-      out[state] = { titles, dids };
+      out[state] = { entries, dids };
     } catch {
-      out[state] = { titles: new Set(), dids: new Set() };
+      out[state] = { entries: [], dids: new Set() };
     }
   }
   return out;
@@ -283,32 +288,88 @@ export async function getRepoNamesForDid(did) {
 
 // ── Fetch bounties from a single tangled.org repo ─────────────────────────
 
-async function fetchBountiesFromRepo(seedRepo) {
-  const cacheKey = `${seedRepo.handle}/${seedRepo.repo}`;
+// Scan one owner for all their OPEN #bounty issues (across every repo they own).
+// Cached per owner with the 5-min TTL so repeated cycles are cheap.
+async function fetchBountiesFromOwner(handle) {
+  const cacheKey = `owner:${handle}`;
   if (isCacheFresh(cacheKey)) return [];
 
-  const did = await resolveHandle(seedRepo.handle);
+  const did = await resolveHandle(handle);
   const pds = await getPdsEndpoint(did);
-  const bounties = await readOpenBountyIssues(pds, did, seedRepo.handle);
+  const bounties = await readOpenBountyIssues(pds, did, handle);
+
+  // Piggyback: tally this owner's Gold Knots for the network leaderboard.
+  // (Awards live on the hunter's own PDS; most discovered owners have none → 0.)
+  try {
+    const awards = await listRecords(pds, did, 'sh.tangled.bounty.award', 100);
+    const gk = awards.reduce((s, r) => s + (r.value?.points || 0), 0);
+    setLeaderboardEntry(handle, { gk, count: awards.length });
+  } catch { /* no awards / unreadable → leave leaderboard untouched */ }
 
   setFetchMeta(cacheKey);
   return bounties;
 }
 
+// ── Auto-discovery ────────────────────────────────────────────────────────
+
+// tangled has no public XRPC / global API, but its home + timeline pages are
+// server-rendered and link every recently-active repo as /{handle}/{repo}.
+// We scrape those (dev-only, via the /tnglweb proxy — the pages have no CORS)
+// to discover owners to scan, instead of relying solely on the seed list.
+// Returns a de-duplicated list of { handle, repo }. Best-effort: covers what's
+// surfaced on the timeline, not literally every repo on the network.
+const NON_REPO_SEGMENTS = new Set([
+  'issues', 'pulls', 'settings', 'tags', 'branches', 'blob', 'tree',
+  'commits', 'login', 'register', 'timeline', 'knots', 'strands',
+]);
+
+export async function discoverRepos(limit = 60) {
+  if (!import.meta.env?.DEV) return []; // needs the dev proxy; prod has no CORS path
+  const found = new Map();
+  for (const page of ['/tnglweb/', '/tnglweb/timeline']) {
+    try {
+      const html = await (await fetch(page)).text();
+      for (const m of html.matchAll(/href="\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)\/([a-z0-9._-]+)"/gi)) {
+        const handle = m[1];
+        const repo = m[2];
+        if (NON_REPO_SEGMENTS.has(repo.toLowerCase())) continue;
+        found.set(`${handle}/${repo}`, { handle, repo });
+      }
+    } catch { /* page unavailable — fall back to whatever else we found */ }
+  }
+  return [...found.values()].slice(0, limit);
+}
+
 // ── Public: fetch all live bounties ──────────────────────────────────────
 
+// How many owners to scan over the network per load (the rest are either
+// cache-fresh from a recent scan or picked up on a later cycle). Bounds first-
+// load cost as the discovered set grows.
+const SCAN_BUDGET = 25;
+
 export async function fetchLiveBounties(onProgress) {
+  // 1. Discover currently-active repos from the appview feed and fold their
+  //    owners into the PERSISTED, growing set (replaces the hardcoded seeds).
+  const discovered = await discoverRepos().catch(() => []);
+  if (discovered.length) addDiscoveredOwners(discovered.map(r => r.handle));
+
+  // 2. Scan the accumulated owner set. Cache-fresh owners return instantly;
+  //    spend the network budget on owners we haven't scanned recently
+  //    (newest discoveries first — addDiscoveredOwners prepends).
+  const owners = getDiscoveredOwners();
+  const stale = owners.filter(h => !isCacheFresh(`owner:${h}`)).slice(0, SCAN_BUDGET);
+
   const allLive = [];
-  for (const repo of SEED_REPOS) {
+  await Promise.all(stale.map(async (handle) => {
     try {
-      const bounties = await fetchBountiesFromRepo(repo);
+      const bounties = await fetchBountiesFromOwner(handle);
       allLive.push(...bounties);
-      if (onProgress) onProgress({ repo, count: bounties.length, error: null });
+      if (onProgress) onProgress({ repo: { handle }, count: bounties.length, error: null });
     } catch (err) {
       liveDataAvailable = false;
-      if (onProgress) onProgress({ repo, count: 0, error: err.message });
+      if (onProgress) onProgress({ repo: { handle }, count: 0, error: err.message });
     }
-  }
+  }));
 
   if (allLive.length > 0) {
     mergeLiveBounties(allLive);

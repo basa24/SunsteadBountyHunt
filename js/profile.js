@@ -2,6 +2,7 @@ import { getUserProfile, getUserHandle, updateUserProfile } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { DIFFICULTY_LABELS } from './data.js';
 import { renderNavChip } from './navchip.js';
+import { runCountUps } from './juice.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -59,14 +60,15 @@ function renderHeader(profile) {
 
 function renderStats(profile) {
   const bp = profile.bountyProfile || {};
-  document.getElementById('stats-row').innerHTML = `
+  const statsEl = document.getElementById('stats-row');
+  statsEl.innerHTML = `
     <div class="stats-row mb-4">
       <div class="stat-item">
-        <div class="stat-value">${bp.totalCompleted || 0}</div>
+        <div class="stat-value" data-countup="${bp.totalCompleted || 0}">0</div>
         <div class="stat-label">Completed</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value">🪙 ${bp.totalPoints || 0}</div>
+        <div class="stat-value">🪙 <span data-countup="${bp.totalPoints || 0}">0</span></div>
         <div class="stat-label">Gold Knots</div>
       </div>
       <div class="stat-item">
@@ -74,11 +76,12 @@ function renderStats(profile) {
         <div class="stat-label">Avg Difficulty</div>
       </div>
       <div class="stat-item">
-        <div class="stat-value">${bp.completionStreak || 0}</div>
+        <div class="stat-value" data-countup="${bp.completionStreak || 0}">0</div>
         <div class="stat-label">Day Streak</div>
       </div>
     </div>
   `;
+  runCountUps(statsEl);
 }
 
 // ── Skill breakdown bar chart ─────────────────────────────────────────────
@@ -166,8 +169,8 @@ function renderAwards(profile) {
     container.innerHTML = `
       <div class="empty-state">
         <div style="font-size:2rem">🏆</div>
-        <p>No bounties completed yet.<br>
-           <a href="index.html">Browse the feed</a> to find your first bounty.</p>
+        <p>No bounties claimed yet.<br>
+           <a href="index.html">Hit the board</a> and bag your first bounty.</p>
       </div>
     `;
     return;

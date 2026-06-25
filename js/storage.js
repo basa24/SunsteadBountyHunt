@@ -7,6 +7,8 @@ const KEYS = {
   CACHE_META:   'bh_cache_meta',
   LAST_FETCH:   'bh_last_fetch',
   SUBMISSIONS:  'bh_submissions',
+  DISCOVERED:   'bh_discovered_owners',
+  LEADERBOARD:  'bh_leaderboard',
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -190,6 +192,47 @@ function computeStreak(awards) {
   return streak;
 }
 
+// ── Discovered repo owners (handles) ────────────────────────────────────────
+// A persisted, growing set of tangled account handles we've seen host repos.
+// Replaces the hardcoded seed list — the more the app is used, the broader the
+// feed. Each is scanned for #bounty issues.
+
+export function getDiscoveredOwners() {
+  return readJSON(KEYS.DISCOVERED) || [];
+}
+
+// Merge new handles in; returns the full set. Newest-first so recent discoveries
+// get scanned first.
+export function addDiscoveredOwners(handles) {
+  const cur = getDiscoveredOwners();
+  const seen = new Set(cur);
+  const fresh = [];
+  for (const h of handles) {
+    const handle = String(h || '').trim().toLowerCase();
+    if (handle && !seen.has(handle)) { seen.add(handle); fresh.push(handle); }
+  }
+  if (!fresh.length) return cur;
+  const next = [...fresh, ...cur];
+  writeJSON(KEYS.DISCOVERED, next);
+  return next;
+}
+
+// ── Network leaderboard ─────────────────────────────────────────────────────
+// Persisted map of handle → { gk, count, updatedAt }, accumulated as we scan
+// discovered owners' award records. Drives the feed sidebar leaderboard.
+
+export function getLeaderboard() {
+  return readJSON(KEYS.LEADERBOARD) || {};
+}
+
+export function setLeaderboardEntry(handle, { gk = 0, count = 0 } = {}) {
+  const h = String(handle || '').trim().toLowerCase();
+  if (!h) return;
+  const lb = getLeaderboard();
+  lb[h] = { gk, count, updatedAt: Date.now() };
+  writeJSON(KEYS.LEADERBOARD, lb);
+}
+
 // ── Pull-request submissions ────────────────────────────────────────────────
 // Tracks bounties the user has opened a real PR for, and the PR's observed
 // state on tangled: 'pending' → 'awarded' (merged) | 'declined' (closed).
@@ -201,13 +244,13 @@ export function getSubmissions() {
 
 export function addSubmission(sub) {
   const subs = getSubmissions();
-  if (!subs.some(s => s.prUri === sub.prUri)) subs.unshift(sub);
+  if (!subs.some(s => s.token === sub.token)) subs.unshift(sub);
   writeJSON(KEYS.SUBMISSIONS, subs);
 }
 
-export function updateSubmission(prUri, patch) {
+export function updateSubmission(token, patch) {
   const subs = getSubmissions();
-  const i = subs.findIndex(s => s.prUri === prUri);
+  const i = subs.findIndex(s => s.token === token);
   if (i !== -1) {
     subs[i] = { ...subs[i], ...patch };
     writeJSON(KEYS.SUBMISSIONS, subs);

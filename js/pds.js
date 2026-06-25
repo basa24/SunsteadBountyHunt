@@ -50,14 +50,18 @@ export async function submitPullRecord({ repoDid, branch = 'main', title, body =
   const gz = await gzipString(patchText);
   const patchBlob = await uploadBlob(gz, 'application/gzip');
   const now = new Date().toISOString();
-  return createRecord('sh.tangled.repo.pull', {
-    target: { repo: repoDid, branch },
+  // Match what tangled's "Paste Patch" flow writes EXACTLY: NO `source` (that's
+  // only for branch/fork PRs), target with repoDid, the patch round — and omit
+  // `references` entirely when empty (the working record has no such key).
+  const record = {
+    target: { repo: repoDid, branch, repoDid },
     title,
     body,
-    references,
     rounds: [{ patchBlob, createdAt: now }],
     createdAt: now,
-  });
+  };
+  if (references && references.length) record.references = references;
+  return createRecord('sh.tangled.repo.pull', record);
 }
 
 // Write a bounty post (sh.tangled.bounty.post) from a parsed bounty object.

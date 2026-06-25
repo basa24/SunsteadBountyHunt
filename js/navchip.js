@@ -6,6 +6,7 @@
 // also owns the sign-in banner; this is the lightweight, read-only variant.
 import { getUserHandle, getUserProfile, clearUserHandle } from './storage.js';
 import { logout } from './auth.js';
+import { runCountUps } from './juice.js';
 
 function avatar(handle) {
   return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(handle || 'anon')}&size=24`;
@@ -29,7 +30,7 @@ export function renderNavChip() {
 
   const gk = getUserProfile()?.bountyProfile?.totalPoints || 0;
   el.innerHTML = `
-    <span class="gk-balance" title="Your Gold Knots balance">🪙 ${gk}</span>
+    <span class="gk-balance" title="Your Gold Knots balance">🪙 <span class="gk-num" data-countup="${gk}">0</span></span>
     <div class="account-chip">
       <a class="account-chip-link" href="profile.html" title="View your profile">
         <img class="avatar avatar-sm" src="${avatar(handle)}" alt="" />
@@ -39,6 +40,7 @@ export function renderNavChip() {
     </div>
   `;
 
+  runCountUps(el);
   document.getElementById('navchip-logout')?.addEventListener('click', () => {
     logout();
     clearUserHandle();

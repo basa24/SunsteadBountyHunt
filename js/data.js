@@ -1,5 +1,6 @@
 // Seed repos to scan on tangled.org (handles resolved to DIDs at runtime)
 export const SEED_REPOS = [
+  { handle: 'karakoz.tngl.sh', repo: 'sunsteadboilerplate' },
   { handle: 'tangled.org', repo: 'core' },
   { handle: 'tangled.org', repo: 'docs' },
   { handle: 'val.bsky.social', repo: 'atproto' },

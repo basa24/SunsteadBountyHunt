@@ -1,9 +1,10 @@
 import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { isLoggedIn, getSession } from './auth.js';
-import { submitPullRequest, canSubmitPR } from './pulls.js';
+import { startSubmission, canTrackPR, reconcileSubmissions } from './pulls.js';
 import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
 import { renderNavChip } from './navchip.js';
+import { coinBurstOnce } from './juice.js';
 
 // ── URL param ─────────────────────────────────────────────────────────────
 
@@ -61,82 +62,84 @@ function renderBounty(bounty) {
     `<div class="diff-dot ${i < bounty.difficulty ? `active-${bounty.difficulty}` : ''}"></div>`
   ).join('');
 
+  const aw = Math.max(0, Math.min(1, Number(bounty.repo?.authorityWeight) || 0));
+  const repoUrl = `https://tangled.org/${bounty.repo?.handle}/${bounty.repo?.name}`;
+
   document.getElementById('bounty-content').innerHTML = `
-    <div class="flex items-center gap-2 mb-3 text-sm text-muted">
-      <span class="status-badge status-open">● Open</span>
-      <span>Posted ${timeAgo(bounty.createdAt)}</span>
-      <a href="${escHtml(bounty.issueUrl || '#')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">
-        View on tangled.org ↗
-      </a>
-    </div>
-
-    <h1 style="font-size:1.375rem;font-weight:700;margin-bottom:1rem;line-height:1.3">
-      ${escHtml(bounty.issueTitle)}
-    </h1>
-
-    <div class="card mb-4">
-      <div class="card-header flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <img class="avatar" style="width:36px;height:36px" src="${avatar(bounty.repo?.handle)}" alt="" />
-          <div>
-            <div class="font-bold text-sm">${escHtml(bounty.repo?.handle || '?')}</div>
-            <div class="text-xs text-muted">${escHtml(bounty.repo?.name || '?')} · ⭐ ${bounty.repo?.stars ?? '–'}</div>
-          </div>
+    <article class="detail rise-in" style="--diff-color:var(--diff-${bounty.difficulty})">
+      <div class="detail-top">
+        <div class="detail-meta">
+          <span class="status-badge status-open">● Open</span>
+          <span class="text-muted text-xs">Posted ${timeAgo(bounty.createdAt)}</span>
         </div>
-        <span class="points-badge" style="font-size:1rem" title="${pts} Gold Knots">+${pts} GK</span>
+        <span class="diff-badge ${diffClass(bounty.difficulty)}">
+          <span class="diff-pip ${diffClass(bounty.difficulty)}"></span>
+          ${bounty.difficulty} · ${DIFFICULTY_LABELS[bounty.difficulty]}
+        </span>
       </div>
-      <div class="card-body">
-        <div class="issue-body"><p>${renderMarkdown(bounty.issueBody || '(No body)')}</p></div>
+
+      <h1 class="detail-title">${escHtml(bounty.issueTitle)}</h1>
+
+      <div class="detail-reward">
+        <span class="points-badge lg" style="font-size:1.2rem" title="${pts} Gold Knots">+${pts} Gold Knots</span>
+        <a class="repo-chip" href="${escHtml(repoUrl)}" target="_blank" rel="noopener">
+          <img class="avatar avatar-sm" src="${avatar(bounty.repo?.handle)}" alt="" />
+          <span class="repo-chip-name">${escHtml(bounty.repo?.handle || '?')}/${escHtml(bounty.repo?.name || '?')}</span>
+          <span class="text-muted text-xs">⭐ ${bounty.repo?.stars ?? '–'} · ${escHtml(bounty.repo?.language || '—')}</span>
+        </a>
+        <a class="btn btn-ghost btn-sm detail-view" href="${escHtml(bounty.issueUrl || '#')}" target="_blank" rel="noopener">View issue ↗</a>
       </div>
-    </div>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <div class="parse-section-title mb-2">Keywords</div>
-        <div class="bounty-tags mb-1">${topHtml}${kwHtml}</div>
-        <div class="text-xs text-muted">Top 3 highlighted · ${(bounty.keywords||[]).length} total</div>
-
-        <hr class="divider">
-
-        <div class="parse-section-title mb-2">Difficulty</div>
-        <div class="flex items-center gap-3 mb-1">
-          <div class="diff-meter">${dots}</div>
-          <span class="diff-badge ${diffClass(bounty.difficulty)}">${bounty.difficulty} · ${DIFFICULTY_LABELS[bounty.difficulty]}</span>
-        </div>
-        <div class="text-xs text-muted">${DIFFICULTY_DESCRIPTIONS[bounty.difficulty]}</div>
-
-        <hr class="divider">
-
-        <div class="parse-section-title mb-1">Authority Weight</div>
-        <div class="text-sm text-secondary">
-          <strong>${bounty.repo?.authorityWeight ?? '–'}</strong>
-          <span class="text-muted"> (based on ${bounty.repo?.stars ?? 0} stars · affects final point value)</span>
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="issue-body"><p>${renderMarkdown(bounty.issueBody || '(No body)')}</p></div>
         </div>
       </div>
-    </div>
 
-    <div id="pr-section"></div>
-    <div id="verify-section"></div>
+      <div class="detail-grid mb-4">
+        <div class="card"><div class="card-body">
+          <div class="parse-section-title mb-2">Difficulty</div>
+          <div class="diff-meter mb-2">${dots}</div>
+          <div class="text-xs text-muted">${DIFFICULTY_DESCRIPTIONS[bounty.difficulty]}</div>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <div class="parse-section-title mb-2">Repo authority</div>
+          <div class="authority-bar"><div class="authority-fill" style="width:${(aw * 100).toFixed(0)}%"></div></div>
+          <div class="text-xs text-muted mt-2"><strong class="text-secondary">${aw.toFixed(2)}</strong> · higher-authority repos pay more Gold Knots.</div>
+        </div></div>
+      </div>
 
-    <div class="mt-4">
-      <div class="collapsible-header" id="schema-toggle">
-        <span class="collapsible-title">AT Protocol Lexicon Record (sh.tangled.bounty.post)</span>
-        <span class="collapsible-chevron">▼</span>
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="parse-section-title mb-2">Keywords</div>
+          <div class="bounty-tags mb-1">${topHtml}${kwHtml}</div>
+          <div class="text-xs text-muted mt-2">Top 3 highlighted · ${(bounty.keywords||[]).length} total</div>
+        </div>
       </div>
-      <div class="collapsible-body" id="schema-body">
-        <pre class="code-block">${escHtml(JSON.stringify({
-          $type: 'sh.tangled.bounty.post',
-          issue: bounty.issueUri,
-          title: bounty.issueTitle,
-          summary: bounty.summary,
-          keywords: bounty.keywords,
-          topKeywords: bounty.topKeywords,
-          difficulty: bounty.difficulty,
-          status: bounty.status,
-          createdAt: bounty.createdAt,
-        }, null, 2))}</pre>
+
+      <div id="pr-section"></div>
+      <div id="verify-section"></div>
+
+      <div class="mt-4">
+        <div class="collapsible-header" id="schema-toggle">
+          <span class="collapsible-title">AT Protocol Lexicon Record (sh.tangled.bounty.post)</span>
+          <span class="collapsible-chevron">▼</span>
+        </div>
+        <div class="collapsible-body" id="schema-body">
+          <pre class="code-block">${escHtml(JSON.stringify({
+            $type: 'sh.tangled.bounty.post',
+            issue: bounty.issueUri,
+            title: bounty.issueTitle,
+            summary: bounty.summary,
+            keywords: bounty.keywords,
+            topKeywords: bounty.topKeywords,
+            difficulty: bounty.difficulty,
+            status: bounty.status,
+            createdAt: bounty.createdAt,
+          }, null, 2))}</pre>
+        </div>
       </div>
-    </div>
+    </article>
   `;
 
   // Collapsible toggle
@@ -163,43 +166,43 @@ function renderPRSection(bounty) {
       const award = (getUserProfile()?.awards || []).find(a => a.bountyId === bounty.id);
       section.innerHTML = `
         <div class="success-panel mb-4">
-          <div class="success-icon">🪙</div>
-          <div class="success-title">PR Merged — Gold Knots Minted!</div>
+          <div class="success-icon">🎯</div>
+          <div class="success-title">Hunt Successful!</div>
           <div class="success-sub flex flex-col items-center gap-2">
-            ${award ? `<span class="points-badge lg gk-pop" style="font-size:1.125rem">+${award.points} Gold Knots</span>` : ''}
-            <span class="text-xs text-muted">Awarded after the owner merged your PR on tangled.</span>
+            ${award ? `<span class="points-badge lg gk-pop" style="font-size:1.125rem">Paid +${award.points} Gold Knots</span>` : ''}
+            <span class="text-xs text-muted">Bounty collected — the owner merged your pull request on tangled.</span>
           </div>
-          <a href="profile.html" class="btn btn-primary mt-2">View Your Profile →</a>
+          <a href="profile.html" class="btn btn-primary mt-2">View your hunter profile →</a>
         </div>
       `;
+      coinBurstOnce(section.querySelector('.success-panel'), bounty.id);
       if (award) renderVerifyPanel(award);
       return;
     }
     if (sub.status === 'declined') {
       section.innerHTML = `
         <div class="card mb-4"><div class="card-body">
-          <div class="notice notice-warn mb-2">✗ Your pull request was closed without merging — no award.</div>
-          <p class="text-sm text-secondary mb-3">You can submit a new pull request to try again.</p>
-          <button class="btn btn-primary" id="pr-btn">Submit Another Pull Request</button>
+          <div class="notice notice-warn mb-2">✗ Hunt failed — your pull request${sub.prNumber ? ` (#${sub.prNumber})` : ''} was closed without merging. No bounty paid.</div>
+          <p class="text-sm text-secondary mb-3">Pick up the trail and try again.</p>
+          <button class="btn btn-primary" id="pr-start-btn">Start a new hunt</button>
         </div></div>
       `;
-      document.getElementById('pr-btn')?.addEventListener('click', () => onSubmitPR(bounty));
+      document.getElementById('pr-start-btn')?.addEventListener('click', () => onStart(bounty));
       return;
     }
-    // pending
+    // pending — show the token to embed and that we're watching for it
     section.innerHTML = `
       <div class="card mb-4" style="border-color:var(--bounty-green-dim)"><div class="card-body">
-        <div class="parse-section-title mb-2">Pull Request Submitted</div>
-        <p class="text-sm text-secondary mb-2">
-          ⏳ Awaiting the owner's review on tangled. When they <strong>merge</strong> it, your award is recorded
-          automatically (we watch the PR's status). If they close it, it's marked declined.
+        <div class="parse-section-title mb-2">On the Hunt — your bounty token</div>
+        ${renderTokenInstructions(bounty, sub.token)}
+        <p class="text-xs text-muted mt-3">
+          ⏳ We're tracking <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener">this repo's pulls</a>
+          for a PR whose title carries your token. When the owner <strong>merges</strong> it, the bounty pays out
+          automatically (~20s). Only a PR carrying <em>your</em> token counts — no one can claim your bounty.
         </p>
-        <div class="flex items-center gap-2">
-          <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">View pulls on tangled ↗</a>
-        </div>
-        <div class="text-xs text-muted mt-2" style="word-break:break-all">PR: <code>${escHtml(sub.prUri)}</code></div>
       </div></div>
     `;
+    document.getElementById('pr-token-copy')?.addEventListener('click', () => navigator.clipboard?.writeText(sub.token));
     return;
   }
 
@@ -207,52 +210,58 @@ function renderPRSection(bounty) {
   if (bounty.status === 'completed') {
     section.innerHTML = `
       <div class="notice" style="margin-bottom:1rem">
-        ✓ This bounty was completed by <strong>${escHtml(bounty.completedBy || 'a hunter')}</strong>.
+        🎯 Bounty already claimed by <strong>${escHtml(bounty.completedBy || 'another hunter')}</strong>.
       </div>
     `;
     return;
   }
 
-  // No submission yet → offer to open a real PR.
+  // No submission yet → issue a token to start.
   const loggedIn = isLoggedIn();
-  const submittable = canSubmitPR(bounty);
+  const trackable = canTrackPR(bounty);
   section.innerHTML = `
     <div class="card mb-4" style="border-color:var(--bounty-green-dim)">
       <div class="card-body">
-        <div class="parse-section-title mb-2">Submit Your Solution</div>
+        <div class="parse-section-title mb-2">Take this bounty</div>
         <p class="text-sm text-secondary mb-3">
-          Open a pull request on
-          <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener">${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}</a>.
-          The owner reviews and <strong>merges it on tangled</strong>; we detect the merge and record your award.
+          Grab a unique token, open a pull request on
+          <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener">${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}</a>
+          with that token in the PR title, and the bounty pays out in Gold Knots when the owner merges it.
         </p>
         ${!loggedIn ? `
-          <div class="notice notice-warn mb-3">Sign in on the main page to submit a pull request.</div>
-        ` : (!submittable ? `
-          <div class="notice notice-warn mb-3">This is a demo/mock bounty — it has no real tangled repo to open a PR against.</div>
-        ` : '')}
-        <button class="btn btn-primary btn-lg w-full" id="pr-btn" ${(!loggedIn || !submittable) ? 'disabled' : ''}>
-          Submit Pull Request
-        </button>
-        <p class="text-xs text-muted mt-2 text-center">
-          A real <code>sh.tangled.repo.pull</code> is written to your PDS and shows up on tangled's pulls page.
-        </p>
+          <div class="notice notice-warn mb-3">Sign in on the main page to take bounties and collect Gold Knots.</div>
+        ` : (!trackable ? `
+          <div class="notice notice-warn mb-3">This is a demo/mock bounty — it has no real tangled repo.</div>
+        ` : `<button class="btn btn-primary btn-lg w-full" id="pr-start-btn">Accept bounty &amp; get my token</button>`)}
       </div>
     </div>
   `;
-
-  document.getElementById('pr-btn')?.addEventListener('click', () => onSubmitPR(bounty));
+  if (loggedIn && trackable) {
+    document.getElementById('pr-start-btn')?.addEventListener('click', () => onStart(bounty));
+  }
 }
 
-async function onSubmitPR(bounty) {
-  const btn = document.getElementById('pr-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Submitting PR…';
+function renderTokenInstructions(bounty, token) {
+  return `
+    <div class="verify-panel" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+      <code style="font-size:1rem;font-weight:700">${escHtml(token)}</code>
+      <button class="btn btn-ghost btn-sm" id="pr-token-copy">Copy</button>
+    </div>
+    <ol class="text-sm text-secondary mt-2" style="padding-left:1.25rem;display:flex;flex-direction:column;gap:0.35rem">
+      <li>Open a PR on
+        <a href="${escHtml(pullsUrl(bounty))}" target="_blank" rel="noopener">${escHtml(bounty.repo?.handle)}/${escHtml(bounty.repo?.name)}</a>
+        (Paste Patch / Compare Branches).</li>
+      <li>Include the token <strong>in the PR title</strong>, e.g. <code>${escHtml(token)} fix: …</code></li>
+      <li>Leave the rest to us — no need to paste anything back.</li>
+    </ol>
+  `;
+}
+
+function onStart(bounty) {
   try {
-    await submitPullRequest(bounty);
-    renderPRSection(bounty); // re-render → now shows the pending state
+    startSubmission(bounty);
+    renderPRSection(bounty); // re-render → pending branch shows token + wires copy
   } catch (e) {
-    btn.disabled = false;
-    btn.textContent = 'Submit Pull Request';
     alert(e.message);
   }
 }
@@ -357,6 +366,19 @@ function init() {
   document.title = `${bounty.issueTitle} — Bounty Hunt`;
   renderBounty(bounty);
   renderPRSection(bounty);
+
+  // Resolve a pending PR right here too (not just from the main-page poll), so
+  // reloading this page picks up a merge/close. Re-render the PR section on any
+  // change, and keep it live while the page is open.
+  if (isLoggedIn()) {
+    const refresh = async () => {
+      const { changed } = await reconcileSubmissions();
+      if (changed) renderPRSection(getBountyById(bountyId) || bounty);
+    };
+    refresh();
+    const timer = setInterval(refresh, 20000);
+    window.addEventListener('beforeunload', () => clearInterval(timer));
+  }
 }
 
 renderNavChip();

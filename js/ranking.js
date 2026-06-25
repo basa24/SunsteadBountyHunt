@@ -47,6 +47,11 @@ function difficultyFit(bounty, user) {
   return Math.max(0, 1 - diff / 4);
 }
 
+// Gold Knots reward for a bounty (must match app.js `points()`).
+export function gkReward(bounty) {
+  return Math.round(bounty.difficulty * 20 * (bounty.repo?.authorityWeight || 0.5));
+}
+
 function repoPopularity(bounty) {
   const stars = bounty.repo?.stars || 0;
   return Math.min(Math.log10(Math.max(stars, 1)) / 4, 1);
@@ -60,11 +65,21 @@ function personalizedScore(bounty, user) {
   return (0.4 * social) + (0.4 * skill) + (0.1 * fresh) + (0.1 * diff);
 }
 
+// Deterministic [0,1) jitter derived from the bounty's identity, so the
+// "relevance" order stays stable across re-renders (the feed re-ranks on every
+// firehose/poll update — Math.random() here would reshuffle it each time).
+function stableJitter(bounty) {
+  const key = bounty.issueUri || bounty.id || '';
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return (Math.abs(h) % 1000) / 1000;
+}
+
 function anonScore(bounty) {
   const fresh  = freshness(bounty);
   const popular = repoPopularity(bounty);
-  const rand   = Math.random() * 0.1;
-  return (0.5 * fresh) + (0.3 * popular) + (0.2 * rand);
+  const jitter  = stableJitter(bounty);
+  return (0.5 * fresh) + (0.3 * popular) + (0.2 * jitter);
 }
 
 // Build a human-readable reason label for why this bounty ranked well
@@ -78,10 +93,26 @@ function buildReason(bounty, user, social, skill) {
   return null;
 }
 
-export function rankBounties(bounties, { limit = 10, filterSkill = null, filterDiff = null, sortMode = 'relevance' } = {}) {
+// A bounty is "real" (live-parsed from an actual tangled issue) vs. demo data —
+// the bundled MOCK_BOUNTIES seed (mock DIDs) or manually-entered/example bounties.
+export function isLiveBounty(b) {
+  const did = b?.repo?.ownerDid || '';
+  const uri = b?.issueUri || '';
+  // Demo/placeholder identities used by mock seed + manual entry.
+  if (/did:plc:(mock|user|unknown|local)/i.test(did + ' ' + uri)) return false;
+  // Real: a live-parsed id, a resolved repo DID, or a real issue at-uri.
+  return String(b?.id || '').startsWith('live-')
+    || !!b?.repo?.repoDid
+    || /^at:\/\/did:plc:[a-z2-7]{20,}\/sh\.tangled\.repo\.issue\//.test(uri);
+}
+
+export function rankBounties(bounties, { limit = 10, filterSkill = null, filterDiff = null, sortMode = 'relevance', liveOnly = false } = {}) {
   const user = getUserProfile();
 
   let list = bounties.filter(b => b.status !== 'completed');
+
+  // Real-world only: drop demo/mock/manual bounties.
+  if (liveOnly) list = list.filter(isLiveBounty);
 
   // Apply filters
   if (filterSkill) {
@@ -109,6 +140,8 @@ export function rankBounties(bounties, { limit = 10, filterSkill = null, filterD
     list.sort((a, b) => a.difficulty - b.difficulty);
   } else if (sortMode === 'difficulty-desc') {
     list.sort((a, b) => b.difficulty - a.difficulty);
+  } else if (sortMode === 'reward-desc') {
+    list.sort((a, b) => gkReward(b) - gkReward(a));
   } else {
     list.sort((a, b) => b._score - a._score);
   }
