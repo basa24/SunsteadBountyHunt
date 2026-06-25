@@ -212,13 +212,60 @@ button { font-family: inherit; cursor: pointer; }
   width: auto;
   flex: none;
   margin: 0 0.05em;
-  overflow: visible; /* round caps + breathe-scale must not clip */
+  overflow: visible; /* arrow flies outside the box when nocked back — must not clip */
+  transform-box: fill-box;
+  transform-origin: center;
   transition: transform 0.45s var(--ease-spring), filter 0.45s var(--ease-out);
 }
-/* nav lockup: knot a touch larger than cap-height, playful on hover */
+/* nav lockup: target a touch larger than cap-height, pops on hover */
 .logo-main .knot-glyph { height: 0.98em; }
-.nav-logo:hover .knot-glyph { transform: rotate(-12deg) scale(1.12); }
+.nav-logo:hover .knot-glyph { transform: scale(1.08); }
 .footer-brand .knotch-mark { font-size: 1.05em; }
+
+/* ── The shot: arrow nocks back on hover, fires into the bull on release ── */
+.knot-arrow {
+  transform: translate(0, 0);          /* resting → stuck dead-center in the gold */
+  /* applies when returning to rest = hover-end: fast launch that overshoots and sticks */
+  transition: transform 0.4s cubic-bezier(0.2, 1.6, 0.32, 1);
+  will-change: transform;
+}
+/* drawn back up its own flight path (up-right), away from the target */
+.start-title:hover .knot-arrow,
+.nav-logo:hover  .knot-arrow {
+  transform: translate(34px, -34px);
+  /* applies while entering hover: slower, decelerating pull-back (nocking the bow) */
+  transition: transform 0.5s cubic-bezier(0.33, 0, 0.2, 1);
+}
+/* Idle float — the lockup gently bobs at rest (hero showcase) */
+.start-title .knotch-mark { animation: knotFloat 3.8s ease-in-out infinite; }
+@keyframes knotFloat {
+  0%, 100% { transform: translateY(0);    }
+  50%      { transform: translateY(-3px); }
+}
+
+/* Impact — the board shudders the instant the arrow lands. brand.js adds
+   `.shot` on hover-end; the delay syncs the shake to the arrow's arrival.
+   The second selector outranks the hero's breathe animation so it can take
+   over for the duration of the hit. */
+.knot-glyph.shot,
+.start-title .knot-glyph.shot { animation: boardImpact 0.26s ease-out 0.07s both; }
+@keyframes boardImpact {
+  0%   { transform: translate(0, 0)           scale(1);     }
+  25%  { transform: translate(0.7px, 0.5px)   scale(0.985); }
+  50%  { transform: translate(-0.5px, -0.3px) scale(1.012); }
+  75%  { transform: translate(0.3px, 0.2px)   scale(1);     }
+  100% { transform: translate(0, 0)           scale(1);     }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knot-arrow,
+  .start-title:hover .knot-arrow,
+  .nav-logo:hover .knot-arrow { transition: none; transform: translate(0, 0); }
+  .start-title .knotch-mark,
+  .start-title .knot-glyph,
+  .knot-glyph.shot,
+  .start-title .knot-glyph.shot { animation: none; }
+}
 
 .nav-links {
   display: flex;
@@ -1758,12 +1805,12 @@ body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
 }
 .start-title .knot-glyph {
   height: 0.92em;
-  filter: drop-shadow(0 0 16px var(--gold-glow));
-  animation: knotBreathe 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px var(--gold-glow)); /* steady — animating blur radius stutters */
+  animation: knotBreathe 5.5s ease-in-out infinite;
 }
 @keyframes knotBreathe {
-  0%, 100% { filter: drop-shadow(0 0 12px var(--gold-glow));         transform: scale(1);    }
-  50%      { filter: drop-shadow(0 0 26px rgba(94, 234, 212, 0.45)); transform: scale(1.05); }
+  0%, 100% { transform: scale(1);     }
+  50%      { transform: scale(1.025); }
 }
 .start-by { font-size: 0.72rem; }
 .start-by .tangled-wordmark { height: 18px; }

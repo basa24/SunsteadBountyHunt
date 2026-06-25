@@ -1,3 +1,4 @@
+import './brand.js';
 import { getUserProfile, getUserHandle, updateUserProfile, addBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { fetchUserProfile, fetchUserBounties, verifyBountyRecord } from './fetcher.js';

@@ -1,3 +1,4 @@
+import './brand.js';
 import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { verifyAwardOnChain } from './repo-verify.js';

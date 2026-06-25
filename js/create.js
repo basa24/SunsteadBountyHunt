@@ -1,3 +1,4 @@
+import './brand.js';
 import { parseIssue, parseIssueWithAPI } from './ai-parser.js';
 import { fetchIssueByUrl } from './fetcher.js';
 import { addBounty, getUserHandle } from './storage.js';
