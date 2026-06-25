@@ -13,5 +13,11 @@
   },
   "allowScripts": {
     "esbuild@0.21.5": true
+  },
+  "dependencies": {
+    "@ipld/car": "^5.4.6",
+    "@ipld/dag-cbor": "^10.0.1",
+    "@noble/curves": "^2.2.0",
+    "multiformats": "^14.0.2"
   }
 }

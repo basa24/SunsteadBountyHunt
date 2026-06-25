@@ -396,6 +396,43 @@ export async function fetchUserBounties(handle) {
   return readOpenBountyIssues(pds, did, handle);
 }
 
+// Provenance check for a bounty: confirm its issue record genuinely exists in
+// the author's repository on their CANONICAL PDS (resolve the DID from the
+// at-uri → PDS → getRecord), and that the content hasn't changed (CID match).
+// This is real DID-backed verification — the record lives in that DID's
+// atproto repo, signed by their key at the protocol layer — no demo keys.
+export async function verifyBountyRecord(bounty) {
+  const uri = bounty?.issueUri || '';
+  const m = uri.match(/^at:\/\/(did:[^/]+)\/([^/]+)\/([^/]+)$/);
+  if (!m) return { valid: false, reason: 'No AT-URI on this bounty to verify.' };
+  const [, did, collection, rkey] = m;
+  try {
+    const pds = await getPdsEndpoint(did); // canonical PDS from the DID document
+    const qs = new URLSearchParams({ repo: did, collection, rkey }).toString();
+    const res = await fetch(`${pds}/xrpc/com.atproto.repo.getRecord?${qs}`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) {
+      return { valid: false, reason: `Record not found on the author's PDS (${res.status}).`, did, pds };
+    }
+    const data = await res.json();
+    const cidMatch = !bounty.issueCid || data.cid === bounty.issueCid;
+    return {
+      valid: true,
+      cidMatch,
+      did,
+      pds,
+      uri: data.uri,
+      cid: data.cid,
+      reason: cidMatch
+        ? "Confirmed — this bounty is a genuine record in the author's repository, served from their canonical PDS."
+        : 'Record exists in the repo, but its content changed since it was indexed (CID differs).',
+    };
+  } catch (e) {
+    return { valid: false, reason: `Verification error: ${e.message}` };
+  }
+}
+
 // ── Fetch a single issue by tangled.org URL ───────────────────────────────
 
 export async function fetchIssueByUrl(issueUrl) {

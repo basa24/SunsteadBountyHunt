@@ -1,5 +1,6 @@
-import { getUserProfile, getUserHandle, updateUserProfile } from './storage.js';
+import { getUserProfile, getUserHandle, updateUserProfile, addBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
+import { fetchUserProfile, fetchUserBounties, verifyBountyRecord } from './fetcher.js';
 import { DIFFICULTY_LABELS } from './data.js';
 import { renderNavChip } from './navchip.js';
 import { runCountUps } from './juice.js';
@@ -27,14 +28,22 @@ function avatar(handle) {
 
 // ── Render profile header ─────────────────────────────────────────────────
 
-function renderHeader(profile) {
+function renderHeader(profile, { self = true } = {}) {
   const bp = profile.bountyProfile || {};
+
+  // Self: editable Public-Profile toggle. Other user: a read-only "viewing" tag.
+  const rightHtml = self
+    ? `<label class="flex items-center gap-2 text-sm text-secondary" style="cursor:pointer">
+         <input type="checkbox" id="public-toggle" ${bp.public ? 'checked' : ''} />
+         Public Profile
+       </label>`
+    : `<a href="index.html" class="btn btn-ghost btn-sm">← Back to feed</a>`;
 
   document.getElementById('profile-header').innerHTML = `
     <div class="profile-header">
       <img class="avatar avatar-lg" src="${avatar(profile.handle)}" alt="" />
       <div class="profile-info flex-1">
-        <div class="profile-name">${escHtml(profile.displayName || profile.handle)}</div>
+        <div class="profile-name">${escHtml(profile.displayName || profile.handle)}${self ? '' : ' <span class="text-muted text-sm">· hunter</span>'}</div>
         <div class="profile-handle">
           <a href="https://tangled.org/${escHtml(profile.handle)}" target="_blank" rel="noopener">
             @${escHtml(profile.handle)} ↗
@@ -42,18 +51,15 @@ function renderHeader(profile) {
         </div>
         <div class="profile-did">${escHtml(profile.did || '')}</div>
       </div>
-      <div>
-        <label class="flex items-center gap-2 text-sm text-secondary" style="cursor:pointer">
-          <input type="checkbox" id="public-toggle" ${bp.public ? 'checked' : ''} />
-          Public Profile
-        </label>
-      </div>
+      <div>${rightHtml}</div>
     </div>
   `;
 
-  document.getElementById('public-toggle')?.addEventListener('change', e => {
-    updateUserProfile({ bountyProfile: { public: e.target.checked } });
-  });
+  if (self) {
+    document.getElementById('public-toggle')?.addEventListener('change', e => {
+      updateUserProfile({ bountyProfile: { public: e.target.checked } });
+    });
+  }
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────────
@@ -217,6 +223,65 @@ function renderSchemas(profile) {
   }, null, 2);
 }
 
+// ── Bounties posted by this person ──────────────────────────────────────────
+
+function gk(b) {
+  return Math.round(b.difficulty * 20 * (b.repo?.authorityWeight || 0.5));
+}
+
+function renderPostedBounties(bounties) {
+  const el = document.getElementById('posted-bounties');
+  if (!el) return;
+
+  if (!bounties.length) {
+    el.innerHTML = `<p class="text-muted text-sm">No open #bounty issues posted.</p>`;
+    return;
+  }
+
+  // Cache them so the in-app bounty page can open them.
+  bounties.forEach(addBounty);
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0.6rem">
+      ${bounties.map((b, i) => `
+        <div class="posted-bounty" data-idx="${i}">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <span class="diff-badge ${diffClass(b.difficulty)} text-xs">${b.difficulty}</span>
+            <a href="bounty.html?id=${encodeURIComponent(b.id)}"
+               style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+               title="${escHtml(b.issueTitle)}">${escHtml(b.issueTitle)}</a>
+            <span class="points-badge" title="${gk(b)} Gold Knots">+${gk(b)} GK</span>
+            <button class="btn btn-ghost btn-sm" data-verify-bounty="${i}" title="Verify this is a real record in the author's repo">Verify</button>
+          </div>
+          <div id="bverify-${i}" class="hidden text-xs mt-1"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Verify = provenance check against the author's canonical PDS.
+  el.querySelectorAll('[data-verify-bounty]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const i = parseInt(btn.dataset.verifyBounty, 10);
+      const out = document.getElementById(`bverify-${i}`);
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>';
+      const r = await verifyBountyRecord(bounties[i]);
+      btn.disabled = false;
+      btn.textContent = 'Verify';
+      out.classList.remove('hidden');
+      if (r.valid) {
+        const host = (() => { try { return new URL(r.pds).host; } catch { return r.pds; } })();
+        out.innerHTML = `
+          <div class="verify-status ${r.cidMatch ? 'verify-pass' : 'verify-fail'}">${r.cidMatch ? '✓' : '⚠'} ${escHtml(r.reason)}</div>
+          <div class="text-muted" style="word-break:break-all">${escHtml(r.did)} · ${escHtml(host)}</div>`;
+      } else {
+        out.innerHTML = `<div class="verify-status verify-fail">✗ ${escHtml(r.reason)}</div>`;
+      }
+    });
+  });
+}
+
 // ── Collapsibles ──────────────────────────────────────────────────────────
 
 function initCollapsibles() {
@@ -230,31 +295,61 @@ function initCollapsibles() {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
-function init() {
-  const handle  = getUserHandle();
-  const profile = getUserProfile();
+function renderProfile(profile, { self }) {
+  document.title = `@${profile.handle} — Bounty Hunt Profile`;
+  renderHeader(profile, { self });
+  renderStats(profile);
+  renderSkillBars(profile);
+  renderAwards(profile);
+  renderSchemas(profile);
+  initCollapsibles();
+}
 
-  if (!handle || !profile) {
+async function init() {
+  const viewHandle = new URLSearchParams(location.search).get('handle');
+  const myHandle   = getUserHandle();
+  const isOther    = viewHandle && viewHandle.toLowerCase() !== (myHandle || '').toLowerCase();
+
+  if (isOther) {
+    // Viewing someone else — public, read-only. Fetch their live profile + posts.
+    document.getElementById('profile-header').innerHTML =
+      `<div class="notice">Loading @${escHtml(viewHandle)}…</div>`;
+    try {
+      const profile = await fetchUserProfile(viewHandle);
+      renderProfile(profile, { self: false });
+    } catch (err) {
+      document.getElementById('profile-header').innerHTML = `
+        <div class="notice notice-warn">
+          Couldn't load @${escHtml(viewHandle)} (${escHtml(err.message)}).
+          <a href="index.html" class="ml-2">← Back to feed</a>
+        </div>`;
+      ['stats-row', 'skill-bars', 'awards-list', 'posted-bounties'].forEach(id => {
+        const e = document.getElementById(id); if (e) e.innerHTML = '';
+      });
+      return;
+    }
+    fetchUserBounties(viewHandle).then(renderPostedBounties).catch(() => renderPostedBounties([]));
+    return;
+  }
+
+  // Self mode (no ?handle or it's me).
+  const profile = getUserProfile();
+  if (!myHandle || !profile) {
     document.getElementById('profile-header').innerHTML = `
       <div class="notice notice-warn">
         No handle connected.
         <a href="index.html" class="ml-2">Connect on the main page →</a>
       </div>
     `;
-    document.getElementById('stats-row').innerHTML = '';
-    document.getElementById('skill-bars').innerHTML = '';
-    document.getElementById('awards-list').innerHTML = '';
+    ['stats-row', 'skill-bars', 'awards-list', 'posted-bounties'].forEach(id => {
+      const e = document.getElementById(id); if (e) e.innerHTML = '';
+    });
     return;
   }
 
-  document.title = `@${handle} — Bounty Hunt Profile`;
-
-  renderHeader(profile);
-  renderStats(profile);
-  renderSkillBars(profile);
-  renderAwards(profile);
-  renderSchemas(profile);
-  initCollapsibles();
+  renderProfile(profile, { self: true });
+  // Your own posted bounties too (live read).
+  fetchUserBounties(myHandle).then(renderPostedBounties).catch(() => renderPostedBounties([]));
 }
 
 renderNavChip();

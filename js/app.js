@@ -360,7 +360,7 @@ function renderLeaderboard() {
         <div class="lb-row${r.you ? ' lb-you' : ''}${i < 3 ? ` lb-top lb-top-${i + 1}` : ''}" style="--lb-i:${i}">
           <span class="lb-rank">${i + 1}</span>
           <img class="avatar avatar-sm lb-avatar" src="${avatar(r.handle)}" alt="" />
-          <a class="lb-name" href="https://tangled.org/${encodeURIComponent(r.handle)}" target="_blank" rel="noopener"
+          <a class="lb-name" href="profile.html?handle=${encodeURIComponent(r.handle)}"
              title="${escHtml(r.handle)}${r.count ? ` · ${r.count} won` : ''}">
             ${escHtml(r.handle)}${r.you ? ' <span class="text-muted">(you)</span>' : ''}
           </a>
