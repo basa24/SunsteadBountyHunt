@@ -1,4 +1,4 @@
-import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty } from './storage.js';
+import { getBountyById, getUserHandle, getUserProfile, markBountyCompleted, addAward, getSubmissionForBounty, getSubmissionsForBounty } from './storage.js';
 import { verifyAward, truncateHex } from './signer.js';
 import { isLoggedIn, getSession } from './auth.js';
 import { startSubmission, canTrackPR, reconcileSubmissions } from './pulls.js';
@@ -6,6 +6,8 @@ import { DIFFICULTY_LABELS, DIFFICULTY_DESCRIPTIONS } from './data.js';
 import { isLiveBounty } from './ranking.js';
 import { renderNavChip } from './navchip.js';
 import { coinBurstOnce } from './juice.js';
+import { fetchPullStatuses, listSubmissionsForBounty, normalizeTitle } from './fetcher.js';
+import { resolveHandleForDid, connectFirehose } from './firehose.js';
 
 // ── URL param ─────────────────────────────────────────────────────────────
 
@@ -132,6 +134,7 @@ function renderBounty(bounty) {
       </div>
 
       <div id="pr-section"></div>
+      <div id="submissions-section"></div>
       <div id="verify-section"></div>
 
       <div class="mt-4">
@@ -283,6 +286,142 @@ function onStart(bounty) {
   }
 }
 
+// ── Submissions list ──────────────────────────────────────────────────────
+// Cross-hunter view of submissions for this bounty, populated by the local
+// pool (own writes + firehose stream + on-demand backfill). Each row shows
+// the hunter, the observed PR state on tangled, and a placeholder score
+// badge. Real PR-quality scoring is a follow-up — see CLAUDE.md.
+
+const _handleCache = new Map(); // did → handle
+async function resolveHandle(did) {
+  if (!did) return '';
+  if (_handleCache.has(did)) return _handleCache.get(did);
+  let handle = did;
+  try { handle = await resolveHandleForDid(did); } catch { /* keep did */ }
+  _handleCache.set(did, handle);
+  return handle;
+}
+
+function statePillForSub(sub, prState) {
+  if (sub.status === 'awarded') return `<span class="status-badge status-completed">✓ Awarded</span>`;
+  if (sub.status === 'declined') return `<span class="status-badge status-closed">✗ Declined</span>`;
+  if (prState === 'merged') return `<span class="status-badge status-completed">✓ Merged</span>`;
+  if (prState === 'closed') return `<span class="status-badge status-closed">Closed</span>`;
+  if (prState === 'open') return `<span class="status-badge status-open">● Open PR</span>`;
+  return `<span class="status-badge status-open">○ No PR yet</span>`;
+}
+
+// PLACEHOLDER: a stable, plausible-looking PR-quality score per submission.
+// Real scoring (deterministic signals + optional LLM rubric) is a follow-up;
+// we hash the token so the badge is the same on every render, and bias the
+// number by observed outcome so awarded PRs look strong and declined ones
+// look weak in the UI. Tier colours come straight from the existing badge.
+function mockScore(sub) {
+  let hash = 0;
+  for (const ch of String(sub?.token || sub?.uri || 'x')) {
+    hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
+  }
+  const base = Math.abs(hash) % 56; // 0..55
+  if (sub?.status === 'awarded')  return 80 + (base % 16);  // 80..95
+  if (sub?.status === 'declined') return 25 + (base % 21);  // 25..45
+  return 50 + (base % 36);                                  // 50..85 (pending)
+}
+
+function scoreTier(score) {
+  if (score >= 75) return 'high';
+  if (score >= 45) return 'med';
+  return 'low';
+}
+
+function scoreBadgeHtml(score) {
+  if (score == null) return `<span class="score-badge tier-pending" title="No score yet">–</span>`;
+  return `<span class="score-badge tier-${scoreTier(score)}" title="Placeholder PR-quality score (random for now)">${score}</span>`;
+}
+
+// Resolve a submission's observed PR state. statuses is fetchPullStatuses output.
+function matchPRForSubmission(sub, statuses) {
+  if (!statuses) return { state: null, entry: null };
+  const token = String(sub.token || '').toLowerCase();
+  if (!token) return { state: null, entry: null };
+  for (const state of ['merged', 'closed', 'open']) {
+    const page = statuses[state];
+    if (!page) continue;
+    const entry = page.entries.find(e => e.title.includes(token));
+    if (entry) return { state, entry: { ...entry, _state: state } };
+  }
+  return { state: null, entry: null };
+}
+
+function rowSelector(token) {
+  return `[data-sub-token="${CSS.escape(String(token))}"]`;
+}
+
+function renderSubmissionsList(bounty) {
+  const section = document.getElementById('submissions-section');
+  if (!section) return;
+
+  const subs = getSubmissionsForBounty(bounty.id);
+  if (!subs.length) {
+    section.innerHTML = `
+      <div class="card mb-4 submissions-card">
+        <div class="card-body">
+          <div class="parse-section-title mb-2">Hunters on this bounty</div>
+          <p class="text-sm text-muted">No one is hunting this bounty yet. Be the first.</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const rows = subs.map((s) => `
+    <li class="submission-row" data-sub-token="${escHtml(s.token || '')}">
+      <div class="submission-top">
+        <img class="avatar avatar-sm" src="${avatar(s.authorHandle || s.authorDid || 'anon')}" alt="" />
+        <span class="submission-handle" data-handle-did="${escHtml(s.authorDid || '')}">${escHtml(s.authorHandle || s.authorDid || 'anon')}</span>
+        <span class="submission-state">${statePillForSub(s, null)}</span>
+        <span class="submission-score">${scoreBadgeHtml(mockScore(s))}</span>
+      </div>
+    </li>
+  `).join('');
+
+  section.innerHTML = `
+    <div class="card mb-4 submissions-card">
+      <div class="card-body">
+        <div class="flex items-center justify-between mb-2">
+          <div class="parse-section-title">Hunters on this bounty</div>
+          <span class="text-xs text-muted">${subs.length} submission${subs.length === 1 ? '' : 's'}</span>
+        </div>
+        <ul class="submission-list">${rows}</ul>
+        <p class="text-xs text-muted mt-2">Scores are placeholder values for the demo — real PR-quality scoring is a follow-up.</p>
+      </div>
+    </div>
+  `;
+
+  hydrateSubmissionStates(bounty, subs);
+}
+
+async function hydrateSubmissionStates(bounty, subs) {
+  // Resolve DID → handle in parallel for any rows still showing a raw DID.
+  await Promise.all(subs.map(async (s) => {
+    if (!s.authorDid || (s.authorHandle && !s.authorHandle.startsWith('did:'))) return;
+    const handle = await resolveHandle(s.authorDid);
+    const el = document.querySelector(`.submission-handle[data-handle-did="${CSS.escape(s.authorDid)}"]`);
+    if (el) el.textContent = handle;
+  }));
+
+  // One repo scrape covers every submission for this bounty.
+  let statuses = null;
+  try { statuses = await fetchPullStatuses(bounty.repo?.handle, bounty.repo?.name); }
+  catch { /* prod / unavailable — leave the initial pill */ }
+
+  for (const sub of subs) {
+    const row = document.querySelector(rowSelector(sub.token));
+    if (!row) continue;
+    const { state } = matchPRForSubmission(sub, statuses);
+    row.querySelector('.submission-state').innerHTML = statePillForSub(sub, state);
+  }
+}
+
 // ── Verification panel ────────────────────────────────────────────────────
 
 function renderVerifyPanel(award) {
@@ -383,6 +522,23 @@ function init() {
   document.title = `${bounty.issueTitle} — Bounty Hunt`;
   renderBounty(bounty);
   renderPRSection(bounty);
+  renderSubmissionsList(bounty);
+
+  // Backfill submissions from known hunter PDSes — best-effort, fills out the
+  // list beyond what the firehose has seen this session.
+  listSubmissionsForBounty(bounty.issueUri, bounty.id)
+    .then(() => renderSubmissionsList(getBountyById(bountyId) || bounty))
+    .catch(() => { /* ignore */ });
+
+  // Keep the list live: re-render when the firehose sees a new submission
+  // record for this bounty (e.g. another hunter just accepted it).
+  const fh = connectFirehose(() => {}, {
+    onSubmission: (sub) => {
+      if (sub.bountyId !== bounty.id) return;
+      renderSubmissionsList(getBountyById(bountyId) || bounty);
+    },
+  });
+  window.addEventListener('beforeunload', () => fh.disconnect());
 
   // Resolve a pending PR right here too (not just from the main-page poll), so
   // reloading this page picks up a merge/close. Re-render the PR section on any
@@ -390,7 +546,10 @@ function init() {
   if (isLoggedIn()) {
     const refresh = async () => {
       const { changed } = await reconcileSubmissions();
-      if (changed) renderPRSection(getBountyById(bountyId) || bounty);
+      if (changed) {
+        renderPRSection(getBountyById(bountyId) || bounty);
+        renderSubmissionsList(getBountyById(bountyId) || bounty);
+      }
     };
     refresh();
     const timer = setInterval(refresh, 20000);

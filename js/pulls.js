@@ -12,12 +12,12 @@
 // The award is gated on the real, owner-performed merge.
 
 import { getSession, isLoggedIn } from './auth.js';
-import { publishAwardRecord } from './pds.js';
+import { publishAwardRecord, publishSubmissionRecord, updateSubmissionRecord } from './pds.js';
 import { createSignedAward } from './signer.js';
 import { fetchPullStatuses } from './fetcher.js';
 import {
   addSubmission, getSubmissions, updateSubmission, getSubmissionForBounty,
-  getBountyById, addAward, markBountyCompleted,
+  getBountyById, addAward, markBountyCompleted, addSubmissionToPool,
 } from './storage.js';
 
 export { getSubmissionForBounty };
@@ -52,17 +52,32 @@ export function startSubmission(bounty) {
   if (existing && existing.status === 'pending') return existing.token;
 
   const token = makeToken();
-  addSubmission({
+  const startedAt = new Date().toISOString();
+  const sub = {
     token,
     bountyId: bounty.id,
     authorDid: session.did,
     authorHandle: session.handle,
     ownerHandle: bounty.repo.handle,
     repoName: bounty.repo.name,
+    repoDid: bounty.repo.repoDid,
     bountyUri: bounty.issueUri,
     status: 'pending',
-    startedAt: new Date().toISOString(),
+    startedAt,
+  };
+  addSubmission(sub);
+  addSubmissionToPool(sub);
+
+  // Best-effort: also publish a sh.tangled.bounty.submission record so other
+  // viewers see this hunt. If it fails (e.g. session expired) the local copy
+  // is enough for the hunter's own tracking; we just won't appear network-wide.
+  publishSubmissionRecord(sub).then(({ uri, cid }) => {
+    updateSubmission(token, { uri, cid });
+    addSubmissionToPool({ ...sub, uri, cid });
+  }).catch((e) => {
+    console.warn('Submission PDS write failed, kept local copy:', e.message);
   });
+
   return token;
 }
 
@@ -77,6 +92,27 @@ function findMatch(status, sub) {
     if (entry) return { state: st, number: entry.number, authorOk: page.dids.has(sub.authorDid) };
   }
   return null;
+}
+
+// Overwrite the hunter's sh.tangled.bounty.submission record with the new
+// terminal status so the network sees the resolution. Best-effort: a missing
+// uri (initial PDS write failed) or a transient error is logged and ignored.
+async function persistSubmissionStatus(sub, patch) {
+  if (!sub.uri) return;
+  try {
+    await updateSubmissionRecord(sub.uri, {
+      bounty: sub.bountyUri,
+      bountyId: sub.bountyId,
+      token: sub.token,
+      repo: { handle: sub.ownerHandle, name: sub.repoName, repoDid: sub.repoDid },
+      status: patch.status,
+      startedAt: sub.startedAt,
+      resolvedAt: patch.resolvedAt,
+      prNumber: patch.prNumber,
+    });
+  } catch (e) {
+    console.warn('Submission PDS update failed:', e.message);
+  }
 }
 
 async function awardForSubmission(sub, prNumber) {
@@ -131,10 +167,16 @@ export async function reconcileSubmissions() {
       // hunter as an author (a token alone is already per-hunter & unguessable).
       if (match.state === 'merged' && match.authorOk) {
         await awardForSubmission(sub, match.number);
-        updateSubmission(sub.token, { status: 'awarded', prNumber: match.number, resolvedAt: new Date().toISOString() });
+        const patch = { status: 'awarded', prNumber: match.number, resolvedAt: new Date().toISOString() };
+        updateSubmission(sub.token, patch);
+        addSubmissionToPool({ ...sub, ...patch });
+        await persistSubmissionStatus(sub, patch);
         changed = true;
       } else if (match.state === 'closed') {
-        updateSubmission(sub.token, { status: 'declined', prNumber: match.number, resolvedAt: new Date().toISOString() });
+        const patch = { status: 'declined', prNumber: match.number, resolvedAt: new Date().toISOString() };
+        updateSubmission(sub.token, patch);
+        addSubmissionToPool({ ...sub, ...patch });
+        await persistSubmissionStatus(sub, patch);
         changed = true;
       }
     }

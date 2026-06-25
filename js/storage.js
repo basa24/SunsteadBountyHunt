@@ -1,14 +1,15 @@
 import { MOCK_BOUNTIES, DEMO_USERS } from './data.js';
 
 const KEYS = {
-  BOUNTIES:     'bh_bounties',
-  USER_HANDLE:  'bh_user_handle',
-  USER_PROFILE: 'bh_user_profile',
-  CACHE_META:   'bh_cache_meta',
-  LAST_FETCH:   'bh_last_fetch',
-  SUBMISSIONS:  'bh_submissions',
-  DISCOVERED:   'bh_discovered_owners',
-  LEADERBOARD:  'bh_leaderboard',
+  BOUNTIES:         'bh_bounties',
+  USER_HANDLE:      'bh_user_handle',
+  USER_PROFILE:     'bh_user_profile',
+  CACHE_META:       'bh_cache_meta',
+  LAST_FETCH:       'bh_last_fetch',
+  SUBMISSIONS:      'bh_submissions',
+  DISCOVERED:       'bh_discovered_owners',
+  LEADERBOARD:      'bh_leaderboard',
+  SUBMISSIONS_POOL: 'bh_submissions_pool',
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -279,6 +280,36 @@ export function setFetchMeta(repoKey) {
 export function isCacheFresh(repoKey, ttlMs = CACHE_TTL_MS) {
   const m = getFetchMeta(repoKey);
   return m && (Date.now() - m.fetchedAt) < ttlMs;
+}
+
+// ── Submissions pool ──────────────────────────────────────────────────────
+// Cross-hunter view of submissions seen on this device. Populated by our own
+// writes, the firehose, and on-demand listRecords scans. Keyed by bountyId so
+// the bounty page can read in O(1).
+
+export function getSubmissionsPool() {
+  return readJSON(KEYS.SUBMISSIONS_POOL) || {};
+}
+
+export function getSubmissionsForBounty(bountyId) {
+  const pool = getSubmissionsPool();
+  return pool[bountyId] || [];
+}
+
+// De-dupe by submission record uri (preferred) or token. Newest write wins on
+// merge so reconciliation updates (e.g. status: awarded) overwrite the older
+// pending row.
+export function addSubmissionToPool(sub) {
+  if (!sub || !sub.bountyId) return;
+  const pool = getSubmissionsPool();
+  const list = pool[sub.bountyId] || [];
+  const idx = list.findIndex(s =>
+    (sub.uri && s.uri === sub.uri) ||
+    (sub.token && s.token === sub.token));
+  if (idx === -1) list.unshift(sub);
+  else list[idx] = { ...list[idx], ...sub };
+  pool[sub.bountyId] = list;
+  writeJSON(KEYS.SUBMISSIONS_POOL, pool);
 }
 
 // ── Reset (for dev/testing) ───────────────────────────────────────────────

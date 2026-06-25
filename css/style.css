@@ -1990,6 +1990,95 @@ body.hunt-entering .footer { animation: huntFade 0.8s 0.12s ease both; }
   .live-indicator { padding: 0.25rem 0.4rem; }
 }
 
+/* ── Status Badge (closed variant) ── */
+.status-closed {
+  background: rgba(248, 81, 73, 0.1);
+  color: var(--diff-4);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+/* ── Submissions list ── */
+.submissions-card { border-color: var(--border); }
+
+.submission-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.submission-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.submission-row:hover { background: var(--bg-card-hover); }
+
+.submission-top {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.submission-handle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.submission-state { flex: none; }
+.submission-score { flex: none; }
+
+/* ── Score badge (deterministic + LLM share one chip) ── */
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  font-variant-numeric: tabular-nums;
+}
+
+.score-badge.tier-high {
+  background: rgba(63, 185, 80, 0.12);
+  color: var(--bounty-green);
+  border: 1px solid rgba(63, 185, 80, 0.35);
+}
+
+.score-badge.tier-med {
+  background: rgba(210, 153, 34, 0.12);
+  color: var(--diff-3);
+  border: 1px solid rgba(210, 153, 34, 0.35);
+}
+
+.score-badge.tier-low {
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--diff-4);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+}
+
+.score-badge.tier-pending {
+  background: rgba(139, 148, 158, 0.08);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
 /* Respect reduced-motion: kill all the bounce, keep it usable */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

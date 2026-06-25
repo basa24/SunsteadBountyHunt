@@ -2,6 +2,7 @@ import { parseIssue } from './ai-parser.js';
 import {
   isCacheFresh, setFetchMeta, mergeLiveBounties, computeBountyProfile,
   getDiscoveredOwners, addDiscoveredOwners, setLeaderboardEntry,
+  addSubmissionToPool, getSubmissionsForBounty,
 } from './storage.js';
 
 // tangled.org does NOT expose public XRPC (tangled.org/xrpc 404s). Tangled data lives
@@ -472,6 +473,70 @@ export async function fetchIssueByUrl(issueUrl) {
 
   const repoMeta = { handle, repo: repoName, did };
   return issueRecordToBounty(found, repoMeta);
+}
+
+// ── Bounty submissions (cross-hunter view) ────────────────────────────────
+// The firehose carries newly-created submission records, but it only sees
+// events that happened AFTER the socket connected. For a bounty page load,
+// we additionally do a best-effort backfill by listing submission records on
+// a handful of known hunter PDSes and filtering by the bounty's URI.
+//
+// Budget is bounded (SUBMISSION_BACKFILL_BUDGET) so this stays cheap; the
+// firehose fills in the long tail as the session continues.
+
+const SUBMISSION_BACKFILL_BUDGET = 12;
+
+// Map a raw sh.tangled.bounty.submission record into the shape the pool stores.
+function submissionRecordToPoolEntry(record, did) {
+  const v = record.value || {};
+  return {
+    uri: record.uri,
+    cid: record.cid,
+    bountyId: v.bountyId,
+    bountyUri: v.bounty,
+    token: v.token,
+    authorDid: did,
+    ownerHandle: v.repo?.handle,
+    repoName: v.repo?.name,
+    repoDid: v.repo?.repoDid,
+    status: v.status || 'pending',
+    startedAt: v.startedAt,
+    resolvedAt: v.resolvedAt,
+    prNumber: v.prNumber,
+  };
+}
+
+// Best-effort: scan up to N known hunter handles for submission records that
+// reference the given bountyUri. Records are pushed into the local pool so
+// subsequent reads via getSubmissionsForBounty pick them up.
+export async function listSubmissionsForBounty(bountyUri, bountyId) {
+  if (!bountyUri) return;
+
+  // Candidates: authors already known to have submitted for this bounty
+  // (from earlier firehose events on this device), plus discovered repo
+  // owners as a long tail. Discovered owners frequently overlap with hunters.
+  const known = new Set();
+  for (const s of getSubmissionsForBounty(bountyId || '')) {
+    if (s.authorDid) known.add(s.authorDid);
+  }
+  for (const h of getDiscoveredOwners()) {
+    if (known.size >= SUBMISSION_BACKFILL_BUDGET) break;
+    known.add(h); // handle string; resolved below
+  }
+
+  const targets = [...known].slice(0, SUBMISSION_BACKFILL_BUDGET);
+
+  await Promise.all(targets.map(async (identifier) => {
+    try {
+      const did = identifier.startsWith('did:') ? identifier : await resolveHandle(identifier);
+      const pds = await getPdsEndpoint(did);
+      const records = await listRecords(pds, did, 'sh.tangled.bounty.submission', 50);
+      for (const r of records) {
+        if (r.value?.bounty !== bountyUri) continue;
+        addSubmissionToPool(submissionRecordToPoolEntry(r, did));
+      }
+    } catch { /* skip — best-effort backfill */ }
+  }));
 }
 
 // ── Awards (persisted on the user's PDS) ──────────────────────────────────
